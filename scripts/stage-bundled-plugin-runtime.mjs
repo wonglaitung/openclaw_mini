@@ -117,6 +117,21 @@ export function stageBundledPluginRuntime(params = {}) {
     const runtimePluginDir = path.join(runtimeExtensionsRoot, dirent.name);
     const distPluginNodeModulesDir = path.join(distPluginDir, "node_modules");
 
+    // 跳过没有 index.js 文件的插件（在离线模式下被排除的消息渠道）
+    const indexJsPath = path.join(distPluginDir, "index.js");
+    if (!fs.existsSync(indexJsPath)) {
+      // 检查是否有其他主入口文件（如 main.js, plugin.js 等）
+      const hasEntryFile = fs
+        .readdirSync(distPluginDir)
+        .some(
+          (file) =>
+            file.endsWith(".js") && file !== "package.json" && file !== "openclaw.plugin.json",
+        );
+      if (!hasEntryFile) {
+        continue; // 跳过没有代码的插件
+      }
+    }
+
     stagePluginRuntimeOverlay(distPluginDir, runtimePluginDir);
     linkPluginNodeModules({
       runtimePluginDir,

@@ -12,6 +12,20 @@ export const optionalBundledClusters = [
   "ui",
   "whatsapp",
   "zalouser",
+  // 消息渠道（构建时可排除）
+  "bluebubbles",
+  "discord",
+  "feishu",
+  "imessage",
+  "irc",
+  "line",
+  "mattermost",
+  "nextcloud-talk",
+  "signal",
+  "slack",
+  "synology-chat",
+  "telegram",
+  "zalo",
 ];
 
 export const optionalBundledClusterSet = new Set(optionalBundledClusters);

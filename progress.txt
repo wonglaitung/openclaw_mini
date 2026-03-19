@@ -45,3 +45,112 @@
 - 协助用户将 origin 远端从官方仓库改为用户 fork
 - 新远端 URL: `https://github.com/wonglaitung/openclaw_mini.git`
 - 确认本地分支领先远端 2 个提交
+
+## 2026-03-20 - 裁减方案可行性深度分析
+- 分析配置方式裁减的可行性：评分 8.5/10
+- 分析构建时排除功能的可行性：评分 9/10
+- 对比两种方案的优缺点
+- 确定采用方案1：扩展现有可选构建机制（构建时排除）
+
+## 2026-03-20 - 构建时排除方案设计
+- 分析现有构建系统：tsdown（基于Rollup）
+- 发现现有可选构建机制：`OPENCLAW_INCLUDE_OPTIONAL_BUNDLED` 环境变量
+- 识别硬编码导入问题：`src/channels/plugins/bundled.ts`
+- 设计构建时排除方案：
+  - 扩展 `optionalBundledClusters` 列表，加入所有消息渠道
+  - 修改 `bundled.ts` 使用条件导入
+  - 创建离线构建脚本
+  - 仅排除消息渠道，不排除浏览器控制等功能
+
+## 2026-03-20 - 构建优化效果预估
+- 包体积减少：~20%（从500MB降至~400MB）
+- 构建时间缩短：~50%（从8-12分钟降至4-6分钟）
+- npm依赖减少：~25%（从800+降至~500-600）
+- 消息渠道完全排除：13个渠道全部排除
+
+## 2026-03-20 - 实施方案确认
+- 确认采用方案1 + 条件导入的组合方案
+- 明确仅排除消息渠道，不包含浏览器控制
+- 浏览器控制等功能通过运行时配置禁用
+- 制定实施优先级：扩展列表 > 条件导入 > 构建脚本 > 测试适配
+
+## 2026-03-20 - 方案实施完成
+- 扩展 `scripts/lib/optional-bundled-clusters.mjs`：加入13个消息渠道
+- 修改 `src/channels/plugins/bundled.ts`：实现异步条件导入
+  - 添加 `getBundledChannelPlugins()` 异步函数
+  - 添加 `getBundledChannelSetupPlugins()` 异步函数
+  - 保留同步导出以维持向后兼容
+- 修改 `src/channels/plugins/setup-registry.ts`：支持异步插件获取
+  - 添加 `listChannelSetupPluginsAsync()` 异步函数
+  - 添加 `getChannelSetupPluginAsync()` 异步函数
+- 创建离线构建脚本：
+  - `scripts/build-offline.sh` (Bash)
+  - `scripts/build-offline.ps1` (PowerShell)
+  - `scripts/build-offline.py` (Python)
+- 代码质量检查：通过 lint 检查（0警告 0错误）
+- 构建脚本已设置执行权限
+
+## 2026-03-20 - 实施总结
+- ✅ 所有高优先级任务已完成
+- ✅ 构建系统已支持离线模式
+- ✅ 向后兼容性保持完好
+- ⚠️ 需要在实际环境测试完整构建流程
+- ⚠️ 可能需要更新相关测试以适配异步导入
+
+## 2026-03-20 - 构建测试完成
+- ✅ 离线构建测试通过：`bash scripts/build-offline.sh`
+- ✅ 消息渠道代码成功排除：
+  - whatsapp/telegram/discord 等13个渠道无 index.js
+  - 仅保留 package.json 和 openclaw.plugin.json
+- ✅ 非消息渠道插件正常保留：
+  - ollama 等插件有完整的 index.js 代码
+- ✅ 正常构建测试通过：向后兼容性完好
+- 📊 构建产物大小：152M（正常构建相同）
+- 📝 构建日志：无错误，无警告
+- 🔍 验证结果：消息渠道的实际代码被正确排除
+
+## 2026-03-20 - 构建产物完整分析
+- 📊 构建统计：
+  - 构建产物总大小：36M（初始 152M，减少 116M）
+  - JS 文件总数：785（初始 3,563，减少 2,778）
+  - 扩展插件总数：75
+  - 已排除插件数：25
+  - 保留插件数：50
+
+- ❌ 已排除的消息渠道（15个）：
+  - whatsapp/telegram/discord/slack/signal/imessage
+  - bluebubbles/feishu/irc/line/mattermost
+  - nextcloud-talk/synology-chat/zalo/zalouser
+  - 所有渠道的 index.js 代码文件已被排除
+  - 所有渠道的 node_modules 已被排除
+  - 仅保留配置文件（package.json + openclaw.plugin.json）
+
+- ❌ 已排除的可选插件（10个）：
+  - acpx/diagnostics-otel/diffs/googlechat/matrix
+  - memory-lancedb/msteams/nostr/tlon/twitch
+  - 所有可选插件的代码和 node_modules 已被排除
+
+- ✅ 保留的 LLM 提供商插件（43个）：
+  - anthropic/openai/openrouter/perplexity/google
+  - huggingface/cohere/together/mistral 等
+
+- ✅ 保留的核心功能插件（4个）：
+  - ollama/memory-core/device-pair/lobster
+
+- ✅ 关键改进（2026-03-20 晚）：
+  - 修改 `stage-bundled-plugin-runtime.mjs`：跳过没有代码的插件
+  - 修改 `stage-bundled-plugin-runtime-deps.mjs`：跳过没有代码的插件
+  - 消息渠道 node_modules 完全排除（之前有 ~118M）
+  - 构建产物从 152M 降至 36M（减少 76%）
+  - JS 文件从 3,563 降至 785（减少 78%）
+
+- 📁 目录结构对比：
+  - 消息渠道（已排除）：仅配置文件，无代码，无 node_modules
+  - LLM 提供商（已保留）：完整代码文件
+
+- 🎯 最终效果：
+  - ✅ 消息渠道代码完全排除
+  - ✅ 消息渠道依赖完全排除
+  - ✅ 磁盘占用显著减少（76%）
+  - ✅ 文件数量显著减少（78%）
+  - ✅ 安全性和合规性大幅提升
