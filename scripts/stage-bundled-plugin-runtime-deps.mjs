@@ -62,6 +62,22 @@ export function stageBundledPluginRuntimeDeps(params = {}) {
     const packageJson = readJson(path.join(pluginDir, "package.json"));
     const nodeModulesDir = path.join(pluginDir, "node_modules");
     removePathIfExists(nodeModulesDir);
+
+    // 跳过没有 index.js 文件的插件（在离线模式下被排除的消息渠道）
+    const indexJsPath = path.join(pluginDir, "index.js");
+    if (!fs.existsSync(indexJsPath)) {
+      // 检查是否有其他主入口文件
+      const hasEntryFile = fs
+        .readdirSync(pluginDir)
+        .some(
+          (file) =>
+            file.endsWith(".js") && file !== "package.json" && file !== "openclaw.plugin.json",
+        );
+      if (!hasEntryFile) {
+        continue; // 跳过没有代码的插件
+      }
+    }
+
     if (!hasRuntimeDeps(packageJson) || !shouldStageRuntimeDeps(packageJson)) {
       continue;
     }
