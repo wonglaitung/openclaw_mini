@@ -34,6 +34,9 @@ export interface AuditEntry {
   toolName?: string;
   toolCallId?: string;
   action?: string;
+  operation?: string;
+  operationSummary?: string;
+  target?: string;
   status?: "success" | "error" | "blocked" | "warning";
   message?: string;
   params?: Record<string, unknown>;
@@ -134,6 +137,137 @@ export function audit(entry: Omit<AuditEntry, "timestamp">): void {
 }
 
 /**
+ * Generate operation summary for audit logging
+ * Extracts human-readable description of what was done
+ */
+function generateOperationSummary(
+  toolName: string,
+  params: Record<string, unknown>,
+): { operation: string; target?: string; summary: string } {
+  switch (toolName) {
+    case "read": {
+      const filePath =
+        typeof params.path === "string"
+          ? params.path
+          : typeof params.file === "string"
+            ? params.file
+            : "unknown";
+      return {
+        operation: "read",
+        target: filePath,
+        summary: `读取文件: ${filePath}`,
+      };
+    }
+    case "write": {
+      const filePath = typeof params.path === "string" ? params.path : "unknown";
+      return {
+        operation: "write",
+        target: filePath,
+        summary: `写入文件: ${filePath}`,
+      };
+    }
+    case "edit": {
+      const filePath = typeof params.path === "string" ? params.path : "unknown";
+      const operation = typeof params.operation === "string" ? params.operation : "编辑";
+      return {
+        operation: "edit",
+        target: filePath,
+        summary: `编辑文件: ${filePath} (${operation})`,
+      };
+    }
+    case "bash": {
+      const command = typeof params.command === "string" ? params.command : "unknown";
+      // 提取命令名作为操作类型
+      const cmdParts = command.trim().split(/\s+/);
+      const cmdName = cmdParts[0] || "bash";
+      return {
+        operation: cmdName,
+        target: typeof params.cwd === "string" ? params.cwd : undefined,
+        summary: `执行命令: ${cmdName}${cmdParts.length > 1 ? " " + cmdParts.slice(1).join(" ") : ""}`,
+      };
+    }
+    case "list": {
+      const dirPath =
+        typeof params.path === "string"
+          ? params.path
+          : typeof params.dir === "string"
+            ? params.dir
+            : "unknown";
+      return {
+        operation: "list",
+        target: dirPath,
+        summary: `列出目录: ${dirPath}`,
+      };
+    }
+    case "create": {
+      const filePath = typeof params.path === "string" ? params.path : "unknown";
+      return {
+        operation: "create",
+        target: filePath,
+        summary: `创建文件: ${filePath}`,
+      };
+    }
+    case "delete": {
+      const filePath = typeof params.path === "string" ? params.path : "unknown";
+      return {
+        operation: "delete",
+        target: filePath,
+        summary: `删除文件: ${filePath}`,
+      };
+    }
+    case "move": {
+      const fromPath = typeof params.from === "string" ? params.from : "unknown";
+      const toPath = typeof params.to === "string" ? params.to : "unknown";
+      return {
+        operation: "move",
+        target: `${fromPath} -> ${toPath}`,
+        summary: `移动文件: ${fromPath} 到 ${toPath}`,
+      };
+    }
+    case "copy": {
+      const fromPath = typeof params.from === "string" ? params.from : "unknown";
+      const toPath = typeof params.to === "string" ? params.to : "unknown";
+      return {
+        operation: "copy",
+        target: `${fromPath} -> ${toPath}`,
+        summary: `复制文件: ${fromPath} 到 ${toPath}`,
+      };
+    }
+    case "search": {
+      const query = typeof params.query === "string" ? params.query : "unknown";
+      const dirPath =
+        typeof params.dir === "string"
+          ? params.dir
+          : typeof params.path === "string"
+            ? params.path
+            : "unknown";
+      return {
+        operation: "search",
+        target: dirPath,
+        summary: `搜索内容: ${query} (目录: ${dirPath})`,
+      };
+    }
+    default: {
+      // 通用处理：尝试提取有意义的参数
+      const keys = Object.keys(params);
+      const targetKey = keys.find((k) =>
+        ["path", "file", "dir", "directory", "url", "target"].includes(k),
+      );
+      const actionKey = keys.find((k) => ["action", "operation", "command", "query"].includes(k));
+
+      const target = targetKey ? String(params[targetKey]) : undefined;
+      const action = actionKey ? String(params[actionKey]) : undefined;
+
+      return {
+        operation: toolName,
+        target,
+        summary: action ? `${toolName}: ${action}` : toolName,
+      };
+    }
+  }
+}
+
+/**
  * Log tool call (basic level)
  */
 export function auditToolCallBasic(params: {
@@ -149,6 +283,8 @@ export function auditToolCallBasic(params: {
     return;
   }
 
+  const { operation, target, summary } = generateOperationSummary(params.toolName, params.params);
+
   audit({
     sessionId: params.sessionId,
     sessionKey: params.sessionKey,
@@ -157,6 +293,9 @@ export function auditToolCallBasic(params: {
     type: "tool_call",
     toolName: params.toolName,
     toolCallId: params.toolCallId,
+    operation,
+    operationSummary: summary,
+    target,
     action: "execute",
     status: "success",
     params: auditConfig.level === "verbose" ? params.params : undefined,
@@ -181,6 +320,8 @@ export function auditToolResult(params: {
     return;
   }
 
+  const { summary } = generateOperationSummary(params.toolName, {});
+
   audit({
     sessionId: params.sessionId,
     sessionKey: params.sessionKey,
@@ -189,6 +330,7 @@ export function auditToolResult(params: {
     type: "tool_result",
     toolName: params.toolName,
     toolCallId: params.toolCallId,
+    operationSummary: summary,
     status: params.error ? "error" : "success",
     message: params.error,
     result: auditConfig.level === "verbose" ? params.result : undefined,
