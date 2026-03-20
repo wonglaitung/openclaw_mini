@@ -152,7 +152,7 @@ export const zh_TW: TranslationMap = {
     },
   },
   login: {
-    subtitle: "閘道儀表板",
+    subtitle: "GUI",
     passwordPlaceholder: "可選",
   },
   chat: {

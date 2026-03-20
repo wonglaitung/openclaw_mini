@@ -692,6 +692,7 @@ export const OpenClawSchema = z
                 debug: z.boolean().optional(),
                 logs: z.boolean().optional(),
                 docs: z.boolean().optional(),
+                instances: z.boolean().optional(),
               })
               .strict()
               .optional(),

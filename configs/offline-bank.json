@@ -60,7 +60,7 @@
     "exec": {
       "security": "allowlist",
       "safeBins": ["python", "python3", "node", "npm", "powershell", "pwsh"],
-      "pathPrepend": ["/mnt/d/bank/scripts", "/mnt/d/bank/tools"],
+      "pathPrepend": ["scripts", "tools"],
       "ask": "off"
     },
     "fs": {
@@ -85,6 +85,7 @@
         "config": true,
         "agents": true,
         "sessions": false,
+        "instances": false,
         "communications": false,
         "appearance": false,
         "automation": false,

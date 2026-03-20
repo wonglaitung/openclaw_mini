@@ -154,7 +154,7 @@ export const en: TranslationMap = {
     },
   },
   login: {
-    subtitle: "Gateway Dashboard",
+    subtitle: "GUI",
     passwordPlaceholder: "optional",
   },
   chat: {
