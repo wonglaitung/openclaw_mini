@@ -178,6 +178,15 @@
   - Command template should stay `openclaw-mac agent --message "${text}" --thinking low`; `VoiceWakeForwarder` already shell-escapes `${text}`. Don’t add extra quotes.
   - launchd PATH is minimal; ensure the app’s launch agent PATH includes standard system paths plus your pnpm bin (typically `$HOME/Library/pnpm`) so `pnpm`/`openclaw` binaries resolve when invoked via `openclaw-mac`.
 
+## Session Workflow
+
+- **会话开始时必须执行以下操作：**
+  - 读取 `progress.txt` 文件，了解项目当前进展
+  - 审查 `lessons.md` 文件，检查是否有错误需要纠正
+- **功能更新后：**
+  - 更新 `progress.txt`，记录新的进展
+  - 如有新的学习心得或经验教训，更新 `lessons.md`
+
 ## Collaboration / Safety Notes
 
 - When working on a GitHub Issue or PR, print the full URL at the end of the task.

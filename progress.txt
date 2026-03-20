@@ -1,0 +1,15 @@
+# OpenClaw 项目进展记录
+
+## 2026-03-20
+- 会话开始，初始化 progress.txt 和 lessons.md 文件
+- 分析 OpenClaw 核心架构，评估内网删减版可行性
+- 可行性评分：8/10（配置方案可行，无需修改代码）
+- 分析沙箱功能，确定无 Docker 情况下的安全方案
+- 生成最小化配置和 Windows 部署脚本：
+  - `configs/offline-bank.json` - 最小化配置（无沙箱、无渠道、本地 LLM）
+  - `scripts/install-offline-windows.ps1` - 自动安装脚本
+  - `scripts/start-offline-windows.ps1` - 启动脚本
+  - `scripts/README-OFFLINE.md` - 完整部署文档
+- 分析 OpenClaw 核心架构，评估内网删减版可行性
+- 可行性评分：8/10（配置方案可行，无需修改代码）
+- 生成最小化配置文件和 Windows 部署脚本
