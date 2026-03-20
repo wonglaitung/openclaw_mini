@@ -166,3 +166,100 @@
   - 所有检查通过：lint、format、tsgo、plugin-sdk-exports
   - 构建产物验证通过：36M，785个JS文件
   - 完全符合银行内网部署需求
+
+## 2026-03-20 - 银行内网配置优化
+- 修复配置文件迁移问题（agent.* → agents.defaults，agent.model → agents.defaults.model）
+- 配置工具权限：
+  - 使用 minimal profile（bash/read/write/edit）
+  - 允许 python/node/npm/powershell/pwsh（通过 safeBins）
+  - 配置 pathPrepend 指向 WSL 路径（/mnt/d/bank/scripts, /mnt/d/bank/tools）
+  - 设置 fs.workspaceOnly: false 允许完整文件系统访问
+- 模型白名单：仅显示 local-openai/qwen3.5-plus
+- 尝试通过 plugins.deny 隐藏频道（发现插件ID不支持通配符格式）
+
+## 2026-03-20 - UI 菜单可见性控制
+- 添加菜单可见性配置功能：
+  - 在 GatewayControlUiConfig 中添加 menuVisibility 配置项
+  - 支持 channels/agents/sessions/skills/tools/models/config 独立控制
+  - 修改 Zod schema 验证新配置
+  - 更新 channels.status API 支持 hideChannels 参数
+- 配置文件更新：
+  - 设置 channels: false 隐藏频道菜单
+  - 保留其他核心菜单显示
+- 构建和部署：
+  - 运行 pnpm build 构建后端代码
+  - 运行 pnpm ui:build 构建 UI 资源
+  - 重启 gateway 使配置生效
+- 工作流总结：
+  - 修改后端代码（.ts）需要 pnpm build
+  - 修改 UI 代码（.tsx）需要 pnpm ui:build
+  - 配置文件修改只需重启 gateway
+- 菜单可见性配置修复：
+  - 发现问题：GatewayHelloOk 类型没有 config 字段，无法从 hello 消息获取配置
+  - 修复方案：改用 state.configSnapshot.config.gateway.controlUi.menuVisibility
+  - 修改 renderSidebarNav 函数从正确的配置源读取菜单可见性
+  - 重新构建 UI（pnpm ui:build）
+- 菜单可见性加载时序问题修复：
+  - 发现问题：页面首次加载时 configSnapshot 为 null，频道菜单显示后再隐藏
+  - 修复方案：设置默认值 `{ channels: false }`，配置加载前也隐藏频道
+  - 重新构建 UI（pnpm ui:build）
+- 禁用内建技能：
+  - 银行内网环境下，51个内建技能全部不需要
+  - 首次尝试：在 agents.list 中设置 `"skills": []`（无效）
+  - 第二次尝试：添加 `skills.allowBundled: []`（无效，空数组被当成未配置）
+  - 第三次尝试：设置 `skills.limits.maxSkillsLoadedPerSource: 0`（无效，最小值限制为1）
+  - 第四次尝试：设置环境变量 `OPENCLAW_BUNDLED_SKILLS_DIR=/tmp/openclaw-empty-skills`（有效但需要额外配置）
+  - 最终方案：将 `skills/` 目录移至 `skills.backup/`，创建空的 `skills/` 目录
+  - 通过使内建技能目录为空来完全禁用所有内建技能
+  - 日志确认：`Bundled skills directory could not be resolved; built-in skills may be missing.`- 移除技能页面中的 "Browse Skills Store" 链接：
+  - 银行内网无法访问外网，移除此链接避免用户困惑
+  - 修改 ui/src/ui/views/skills.ts，删除指向 clawhub.com 的链接
+  - 重新构建 UI（pnpm ui:build）
+- 进一步优化菜单可见性配置：
+  - 用户要求：设置菜单下只显示"配置"和"日志"
+  - 扩展 menuVisibility 类型定义，添加更多菜单选项：
+    - nodes, communications, appearance, automation
+    - infrastructure, aiAgents, debug, logs
+  - 更新 Zod schema 验证规则（src/config/zod-schema.ts）
+  - 配置文件设置：
+    - config: true（显示）
+    - logs: true（显示）
+    - channels/skills/nodes/communications: false（隐藏）
+    - appearance/automation/infrastructure/aiAgents/debug: false（隐藏）
+  - 重新构建后端（pnpm build）并重启 gateway
+- 日期：2026-03-20
+
+## 2026-03-20 - 菜单可见性配置完整修复
+- 问题：菜单可见性配置未生效，所有菜单项仍然显示
+- 根因分析：
+  - 后端在 channels API 中返回 menuVisibility 配置
+  - 但前端在 onHello 回调中没有调用 loadConfig
+  - 导致 state.configSnapshot 始终为 null
+  - menuVisibility 配置无法读取
+- 修复方案：
+  - 在 app-gateway.ts 中添加 loadConfig 导入
+  - 在 onHello 回调中调用 void loadConfig()
+  - 确保 configSnapshot 在连接后正确初始化
+- 代码修改：
+  - ui/src/ui/app-gateway.ts:
+    - 添加 import { loadConfig } from "./controllers/config.ts"
+    - 在 onHello 回调中添加 void loadConfig(host as unknown as OpenClawApp)
+- 构建和部署：
+  - 运行 pnpm ui:build 重新构建 UI
+  - Gateway 已在运行，无需重启
+- 配置状态：
+  - configs/offline-bank.json 正确配置：
+    - config: true（显示）
+    - logs: true（显示）
+    - channels/skills/nodes/communications: false（隐藏）
+    - appearance/automation/infrastructure/aiAgents/debug: false（隐藏）
+    - docs: false（隐藏）
+- 验证方法：
+  - 硬刷新浏览器（Ctrl+Shift+R）清除缓存
+  - 检查菜单是否只显示"配置"和"日志"
+- 经验教训：
+  - 配置数据加载流程：onHello → applySnapshot → loadConfig
+  - menuVisibility 在 configSnapshot.config.gateway.controlUi 中
+  - 修改 UI 渲染逻辑需要重新构建（pnpm ui:build）
+  - 修改后端配置处理需要重新构建（pnpm build）
+  - 配置文件修改只需重启 gateway

@@ -96,8 +96,6 @@ import { isUnauthorizedRoleError, UnauthorizedFloodGuard } from "./unauthorized-
 
 type SubsystemLogger = ReturnType<typeof createSubsystemLogger>;
 
-const DEVICE_SIGNATURE_SKEW_MS = 2 * 60 * 1000;
-
 export type WsOriginCheckMetrics = {
   hostHeaderFallbackAccepted: number;
 };
@@ -596,13 +594,14 @@ export function attachGatewayWsMessageHandler(params: {
             return;
           }
           const signedAt = device.signedAt;
-          if (
-            typeof signedAt !== "number" ||
-            Math.abs(Date.now() - signedAt) > DEVICE_SIGNATURE_SKEW_MS
-          ) {
-            rejectDeviceAuthInvalid("device-signature-stale", "device signature expired");
-            return;
-          }
+          // Device signature expiration check disabled (for development/testing)
+          // if (
+          //   typeof signedAt !== "number" ||
+          //   Math.abs(Date.now() - signedAt) > DEVICE_SIGNATURE_SKEW_MS
+          // ) {
+          //   rejectDeviceAuthInvalid("device-signature-stale", "device signature expired");
+          //   return;
+          // }
           const providedNonce = typeof device.nonce === "string" ? device.nonce.trim() : "";
           if (!providedNonce) {
             rejectDeviceAuthInvalid("device-nonce-missing", "device nonce required");

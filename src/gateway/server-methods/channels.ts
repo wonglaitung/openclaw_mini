@@ -193,7 +193,10 @@ export const channelsHandlers: GatewayRequestHandlers = {
       return { accounts, defaultAccountId, defaultAccount, resolvedAccounts };
     };
 
-    const uiCatalog = buildChannelUiCatalog(plugins);
+    const uiCatalog = buildChannelUiCatalog(plugins, {
+      hideChannels: cfg.gateway?.controlUi?.hideChannels ?? false,
+    });
+    const menuVisibility = cfg.gateway?.controlUi?.menuVisibility ?? {};
     const payload: Record<string, unknown> = {
       ts: Date.now(),
       channelOrder: uiCatalog.order,
@@ -201,6 +204,7 @@ export const channelsHandlers: GatewayRequestHandlers = {
       channelDetailLabels: uiCatalog.detailLabels,
       channelSystemImages: uiCatalog.systemImages,
       channelMeta: uiCatalog.entries,
+      menuVisibility,
       channels: {} as Record<string, unknown>,
       channelAccounts: {} as Record<string, unknown>,
       channelDefaultAccountId: {} as Record<string, unknown>,

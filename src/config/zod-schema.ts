@@ -673,6 +673,28 @@ export const OpenClawSchema = z
             dangerouslyAllowHostHeaderOriginFallback: z.boolean().optional(),
             allowInsecureAuth: z.boolean().optional(),
             dangerouslyDisableDeviceAuth: z.boolean().optional(),
+            hideChannels: z.boolean().optional(),
+            menuVisibility: z
+              .object({
+                channels: z.boolean().optional(),
+                agents: z.boolean().optional(),
+                sessions: z.boolean().optional(),
+                skills: z.boolean().optional(),
+                tools: z.boolean().optional(),
+                models: z.boolean().optional(),
+                config: z.boolean().optional(),
+                nodes: z.boolean().optional(),
+                communications: z.boolean().optional(),
+                appearance: z.boolean().optional(),
+                automation: z.boolean().optional(),
+                infrastructure: z.boolean().optional(),
+                aiAgents: z.boolean().optional(),
+                debug: z.boolean().optional(),
+                logs: z.boolean().optional(),
+                docs: z.boolean().optional(),
+              })
+              .strict()
+              .optional(),
           })
           .strict()
           .optional(),
