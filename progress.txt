@@ -419,3 +419,67 @@
   - ✅ 配置验证通过
   - ✅ 审计日志文件准备就绪：`~/.openclaw/audit.log`
 - 日期：2026-03-20
+
+## 2026-03-20 - PowerShell 自动降级到 cmd.exe
+- 需求背景：银行内网环境可能禁用 PowerShell，需要自动降级到 cmd.exe
+- 实现方案：自动检测 + 优雅降级 + 审计日志
+- 核心实现：
+  1. 创建 `src/agents/shell-fallback.ts`：
+     - `testPowerShellExecution()` - 测试 PowerShell 是否可用（5秒超时）
+     - `isCmdExe()` - 检测 shell 路径是否为 cmd.exe
+     - `detectShellKind()` - 检测 shell 类型（powershell/cmd/bash/sh/unknown）
+     - `translatePowerShellToCmd()` - PowerShell 语法转换到 cmd.exe
+       - 转换 `&&` → `&`（命令链）
+       - 转换 `$env:VAR` → `%VAR%`（环境变量）
+       - 转换反引号 → `^`（行继续）
+       - 转换 `$null` → `>nul`（输出抑制）
+       - 转换 `Write-Host` → `echo`（输出命令）
+     - `executeCommandWithFallback()` - 带自动降级的命令执行
+     - `auditShellFallback()` - 记录降级事件到审计日志
+     - `getShellConfig()` - 返回完整的 shell 配置（包括 kind 和 isPowerShell）
+     - 类型定义：`ShellKind`、`ShellConfig`
+  2. 修改 `src/agents/shell-utils.ts`：
+     - 添加 `testPowerShellExecution()` 函数
+     - 添加 `isCmdExe()` 函数
+     - 修改 `getShellConfig()` - 检测 cmd.exe 并返回警告
+     - 修改 `resolvePowerShellPath()` - 测试 PowerShell 可用性后降级到 cmd.exe
+     - 添加审计日志集成（降级时记录到审计日志）
+- 降级策略：
+  - 优先级：PowerShell 7 → PowerShell 5.1 → cmd.exe
+  - 检测方法：尝试执行简单命令（`1`），超时 5 秒
+  - 降级触发：PowerShell 不可用或执行失败
+  - 降级警告：日志输出降级原因和限制
+- 语法转换支持：
+  - 命令链：`&&` → `&`
+  - 环境变量：`$env:VAR` → `%VAR%`
+  - 行继续：反引号 → `^`
+  - 输出抑制：`$null` → `>nul`
+  - 输出命令：`Write-Host` → `echo`
+- 审计日志记录：
+  - 降级事件自动记录到审计日志
+  - 记录原始 shell、降级 shell 和降级原因
+- 构建和部署：
+  - 修改后端代码后运行 `pnpm build`
+  - 构建成功通过（0 错误 0 警告）
+  - 重启 gateway 使配置生效
+- 遇到的问题和解决：
+  - 问题：重复的 `systemRoot` 变量声明
+  - 解决：合并两个 `systemRoot` 声明，移除重复的 if 检查
+  - 问题：导入路径错误（`./audit.js` → `../logging/audit.js`）
+  - 解决：修正导入路径为正确的相对路径
+  - 问题：重复的 `getShellConfig()` 函数定义
+  - 解决：移除旧版本，保留新版本（包含降级逻辑）
+- 提交：
+  - （待提交）
+- 验证结果：
+  - ✅ 所有 lint、format、tsgo 检查通过
+  - ✅ 构建成功（0 错误 0 警告）
+  - ✅ 自动降级机制已实现
+  - ✅ 语法转换功能已实现
+  - ✅ 审计日志集成已实现
+- 经验教训：
+  - 银行内网环境限制：可能禁用 PowerShell
+  - 降级策略优先级：优先使用 PowerShell 7（支持 &&），否则降级到 PS 5.1 或 cmd.exe
+  - 语法转换限制：cmd.exe 不支持所有 PowerShell 语法，需要转换
+  - 审计日志重要性：降级事件需要记录，便于问题追踪
+- 日期：2026-03-20
