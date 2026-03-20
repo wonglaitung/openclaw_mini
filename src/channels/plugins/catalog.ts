@@ -307,7 +307,20 @@ function loadBundledMetadataCatalogEntries(options: CatalogOptions): ChannelPlug
 
 export function buildChannelUiCatalog(
   plugins: Array<{ id: string; meta: ChannelMeta }>,
+  options?: { hideChannels?: boolean },
 ): ChannelUiCatalog {
+  // 如果配置了隐藏频道，返回空的目录
+  if (options?.hideChannels) {
+    return {
+      entries: [],
+      order: [],
+      labels: {},
+      detailLabels: {},
+      systemImages: {},
+      byId: {},
+    };
+  }
+
   const entries: ChannelUiMetaEntry[] = plugins.map((plugin) => {
     const detailLabel = plugin.meta.detailLabel ?? plugin.meta.selectionLabel ?? plugin.meta.label;
     return {

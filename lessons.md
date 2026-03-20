@@ -809,3 +809,402 @@ if (!fs.existsSync(indexJsPath)) {
 3. 完善的测试和验证
 
 4. 清晰的文档和经验记录
+
+### 配置文件迁移经验（2026-03-20）
+
+**1. 配置版本迁移的常见问题**
+
+- 旧配置键：`agent.*`, `agent.model`
+- 新配置键：`agents.defaults.*`, `agents.defaults.model.primary/fallbacks`
+- 迁移策略：OpenClaw 会自动迁移，但需要配置验证
+
+- 验证方法：
+  ```bash
+  OPENCLAW_CONFIG_PATH=configs/offline-bank.json node openclaw.mjs gateway run
+  ```
+
+**2. 工具安全配置**
+
+- **profile 选择**：
+  - `minimal` - 最小工具集（bash/read/write/edit）
+  - `messaging` - 消息工具集
+  - `coding` - 编码工具集
+  - 银行内网建议使用 `minimal` 减少攻击面
+
+- **exec 安全模式**：
+  - `allowlist` - 只允许 safeBins 中的二进制
+  - `deny` - 拒绝特定二进制
+  - 银行内网必须使用 `allowlist`
+
+- **safeBins 配置**：
+  - 列出允许的可执行文件：python, node, npm, powershell, pwsh
+  - 通过 bash 工具调用，不是独立工具
+  - 不要在 allow/deny 列表中配置可执行文件
+
+- **pathPrepend 配置**：
+  - WSL 环境下必须使用 WSL 路径格式
+  - Windows 路径：`D:\bank\scripts` → WSL：`/mnt/d/bank/scripts`
+  - Windows 路径：`D:\bank\tools` → WSL：`/mnt/d/bank/tools`
+
+**3. 模型白名单配置**
+
+- **问题**：即使只配置一个模型，UI 仍显示所有内置模型
+- **原因**：OpenClaw 有内置模型目录，包含 50+ 提供商的模型
+- **解决方案**：使用 `agents.defaults.models` 白名单
+
+```json
+"agents": {
+  "defaults": {
+    "model": {
+      "primary": "local-openai/qwen3.5-plus"
+    },
+    "models": {
+      "local-openai/qwen3.5-plus": {}
+    }
+  }
+}
+```
+
+- **效果**：UI 只显示白名单中的模型
+
+**4. 频道隐藏的配置限制**
+
+- **问题**：`channels.enabled` 只禁用功能，不隐藏 UI 菜单
+- **问题**：`plugins.deny` 不支持通配符（`*telegram*` 无效）
+- **根本原因**：频道菜单是硬编码在前端 UI 的
+- **解决方案**：需要修改后端 API 和前端代码
+
+**5. 工作区限制 vs 文件系统限制**
+
+- **workspaceOnly: true** - 只能访问 workspace 目录
+- **workspaceOnly: false** - 可以访问整个文件系统
+- 银行内网：通常设为 false（已通过网络隔离）
+
+- **替代方案**：操作系统级隔离
+  - Docker 容器挂载特定目录
+  - chroot 环境
+  - 文件系统权限控制
+
+### UI 菜单可见性控制实现（2026-03-20）
+
+**1. 配置驱动的 UI 控制**
+
+- **设计理念**：通过配置文件控制 UI 显示，无需修改前端代码
+- **优势**：
+  - 易于调整，无需重新编译
+  - 适用于不同部署场景
+  - 保持代码简洁
+
+- **实现方式**：
+  - 添加配置项到 `GatewayControlUiConfig`
+  - 通过 API 返回给前端
+  - 前端根据配置渲染菜单
+
+**2. 配置类型定义**
+
+```typescript
+export type GatewayControlUiConfig = {
+  /** ... 其他配置 ... */
+  menuVisibility?: {
+    channels?: boolean;
+    agents?: boolean;
+    sessions?: boolean;
+    skills?: boolean;
+    tools?: boolean;
+    models?: boolean;
+    config?: boolean;
+  };
+};
+```
+
+**3. Zod Schema 验证**
+
+- **目的**：确保配置文件中的 menuVisibility 有效
+- **实现**：在 `zod-schema.ts` 中添加验证规则
+
+```typescript
+menuVisibility: z.object({
+  channels: z.boolean().optional(),
+  agents: z.boolean().optional(),
+  sessions: z.boolean().optional(),
+  skills: z.boolean().optional(),
+  tools: z.boolean().optional(),
+  models: z.boolean().optional(),
+  config: z.boolean().optional(),
+})
+  .strict()
+  .optional();
+```
+
+**4. API 集成**
+
+- **修改文件**：`src/gateway/server-methods/channels.ts`
+- **修改函数**：`channels.status` API
+- **实现方式**：
+  - 读取配置中的 `gateway.controlUi.menuVisibility`
+  - 在 API 响应中返回菜单可见性信息
+  - 前端根据响应显示/隐藏菜单
+
+**5. 构建工作流**
+
+- **修改后端代码**（`.ts` 文件）：
+
+  ```bash
+  pnpm build
+  ```
+
+- **修改 UI 代码**（`.tsx` 文件）：
+
+  ```bash
+  pnpm ui:build
+  ```
+
+- **修改配置文件**（`.json`）：
+  ```bash
+  # 只需重启 gateway，无需构建
+  ```
+
+**6. 配置文件示例**
+
+```json
+"gateway": {
+  "controlUi": {
+    "menuVisibility": {
+      "channels": false,
+      "skills": true,
+      "tools": true,
+      "models": true,
+      "config": true,
+      "agents": true,
+      "sessions": true
+    }
+  }
+}
+```
+
+**7. 银行内网部署场景**
+
+**推荐配置**：
+
+```json
+"menuVisibility": {
+  "channels": false,    // ✅ 隐藏频道（银行内网不需要）
+  "skills": false,      // ✅ 隐藏技能（简化界面）
+  "tools": true,        // ✅ 显示工具（核心功能）
+  "models": true,       // ✅ 显示模型（配置管理）
+  "config": true,       // ✅ 显示配置（管理需要）
+  "agents": true,       // ✅ 显示代理（会话管理）
+  "sessions": true      // ✅ 显示会话（历史记录）
+}
+```
+
+**8. 实施步骤总结**
+
+1. 添加类型定义（`types.gateway.ts`）
+
+2. 添加 Zod 验证（`zod-schema.ts`）
+
+3. 修改 API（`channels.ts`）
+
+4. 构建后端（`pnpm build`）
+
+5. 构建 UI（`pnpm ui:build`）
+
+6. 更新配置文件（`offline-bank.json`）
+
+7. 重启 gateway
+
+8. 刷新浏览器
+
+**9. 遇到的问题和解决**
+
+- **问题**：配置验证失败（"Unrecognized key: hideChannels"）
+- **原因**：Zod schema 中缺少字段定义
+- **解决**：在 `zod-schema.ts` 中添加 `hideChannels` 字段
+- **经验**：每次添加配置项都要同步更新 Zod schema
+
+- **问题**：构建后配置仍无效
+- **原因**：未重新构建代码
+- **解决**：运行 `pnpm build` 重新编译
+- **经验**：后端代码修改必须重新构建
+
+- **问题**：UI 资源缺失错误
+- **原因**：未构建 UI 资源
+- **解决**：运行 `pnpm ui:build` 构建 UI
+- **经验**：UI 代码修改必须单独构建
+
+**10. 经验教训**
+
+1. **配置驱动的架构**：优先通过配置文件控制行为，而非硬编码
+
+2. **类型安全**：TypeScript + Zod 双重验证确保配置正确
+
+3. **渐进式实现**：先实现核心功能，再逐步添加配置选项
+
+4. **构建流程**：理解不同构建命令的作用和触发条件
+
+5. **测试验证**：每次修改后都要测试完整流程
+
+**11. 后续优化建议**
+
+- **前端响应**：实现前端根据配置动态显示/隐藏菜单
+- **默认值**：为每个菜单项设置合理的默认显示状态
+- **文档**：添加菜单可见性配置的使用文档
+- **测试**：添加配置验证的自动化测试
+
+### 配置数据加载流程问题（2026-03-20）
+
+**1. 问题背景**
+
+- 实现菜单可见性控制功能后，配置未生效
+- 所有菜单项仍然显示，只有部分被隐藏
+- 前端代码读取配置的位置正确，但配置为 null
+
+**2. 根本原因分析**
+
+- **后端实现**：`channels.status` API 正确返回 `menuVisibility` 配置
+- **前端实现**：`app-render.ts` 正确读取 `state.configSnapshot?.config?.gateway?.controlUi?.menuVisibility`
+- **问题所在**：`onHello` 回调中没有调用 `loadConfig`
+- **数据流缺失**：
+  ```
+  连接建立 → onHello → applySnapshot → ❌ 缺少 loadConfig
+  → configSnapshot 为 null → menuVisibility 无法读取 → 所有菜单显示
+  ```
+
+**3. 配置数据加载流程**
+
+正确的配置数据加载流程：
+
+```
+1. WebSocket 连接建立
+2. onHello 回调触发
+3. applySnapshot(host, hello) - 更新 hello.snapshot 信息
+4. loadConfig(host) - 调用 config.get API
+5. applyConfigSnapshot(state, snapshot) - 更新 state.configSnapshot
+6. state.configSnapshot.config.gateway.controlUi.menuVisibility 可用
+```
+
+**4. 关键代码位置**
+
+- **API 端点**：`src/gateway/server-methods/config.ts` - `config.get` 方法
+- **前端控制器**：`ui/src/ui/controllers/config.ts` - `loadConfig` 函数
+- **状态管理**：`ui/src/ui/app.ts` - `@state() configSnapshot`
+- **连接处理**：`ui/src/ui/app-gateway.ts` - `onHello` 回调
+
+**5. 修复方案**
+
+在 `app-gateway.ts` 中添加配置加载：
+
+```typescript
+import { loadConfig } from "./controllers/config.ts";
+
+onHello: (hello) => {
+  // ... 其他代码
+  applySnapshot(host, hello);
+  void loadAssistantIdentity(host as unknown as OpenClawApp);
+  void loadAgents(host as unknown as OpenClawApp);
+  void loadConfig(host as unknown as OpenClawApp); // ← 添加这行
+  void loadHealthState(host as unknown as OpenClawApp);
+  // ...
+};
+```
+
+**6. 经验教训**
+
+**A. 配置加载的时机**
+
+- `applySnapshot` 只更新 `hello.snapshot`（系统状态、会话默认值等）
+- `loadConfig` 调用 API 获取完整配置
+- 两者独立，都需要在连接后执行
+
+**B. hello 消息的局限**
+
+- `hello` 消息包含系统信息、健康状态、会话默认值
+- **不包含**完整的配置文件
+- 配置需要通过独立的 `config.get` API 获取
+
+**C. configSnapshot 的来源**
+
+- `configSnapshot` 来自 `loadConfig` 调用
+- 不是来自 `hello.snapshot`
+- 这是两个独立的数据源
+
+**D. 调试方法**
+
+**后端调试**：
+
+```typescript
+// 检查 API 是否正确返回配置
+// src/gateway/server-methods/channels.ts
+const menuVisibility = cfg.gateway?.controlUi?.menuVisibility ?? {};
+console.log("Backend menuVisibility:", menuVisibility);
+```
+
+**前端调试**：
+
+```typescript
+// 检查配置是否正确加载
+console.log("configSnapshot:", state.configSnapshot);
+console.log("menuVisibility:", state.configSnapshot?.config?.gateway?.controlUi?.menuVisibility);
+```
+
+**网络调试**：
+
+- 打开浏览器开发者工具 → Network 标签
+- 查找 `config.get` 请求
+- 检查响应是否包含 `menuVisibility`
+
+**E. 常见问题排查**
+
+| 问题                        | 可能原因            | 检查方法                  |
+| --------------------------- | ------------------- | ------------------------- |
+| configSnapshot 为 null      | loadConfig 未调用   | 检查 onHello 回调         |
+| menuVisibility 为 undefined | 配置键路径错误      | 检查类型定义和 Zod schema |
+| 配置无效                    | Zod schema 验证失败 | 检查后端日志              |
+| API 请求失败                | 网络或认证问题      | 检查 Network 标签         |
+
+**F. 构建工作流总结**
+
+```
+修改后端代码（.ts）
+  ↓
+pnpm build
+  ↓
+重启 gateway
+
+修改 UI 代码（.tsx/.ts）
+  ↓
+pnpm ui:build
+  ↓
+刷新浏览器
+
+修改配置文件（.json）
+  ↓
+重启 gateway
+  ↓
+刷新浏览器
+```
+
+**G. 验证清单**
+
+- [ ] 后端 API 正确返回 `menuVisibility`
+- [ ] 前端 `onHello` 回调中调用 `loadConfig`
+- [ ] `configSnapshot` 不为 null
+- [ ] `configSnapshot.config.gateway.controlUi.menuVisibility` 可访问
+- [ ] 菜单根据配置正确显示/隐藏
+- [ ] 浏览器控制台无错误
+
+**7. 总结**
+
+配置数据加载的正确流程是：
+
+```
+连接 → onHello → applySnapshot → loadConfig → configSnapshot 可用 → UI 渲染
+```
+
+关键点：
+
+- `hello.snapshot` 和 `configSnapshot` 是两个独立的数据源
+- `loadConfig` 必须在 `onHello` 中调用
+- 配置验证需要后端（类型定义）和前端（Zod schema）同步
+- 问题排查需要系统地检查数据流的每个环节

@@ -118,6 +118,27 @@ export type GatewayControlUiConfig = {
   allowInsecureAuth?: boolean;
   /** DANGEROUS: Disable device identity checks for the Control UI (default: false). */
   dangerouslyDisableDeviceAuth?: boolean;
+  /** If true, hide all messaging channels from the UI. */
+  hideChannels?: boolean;
+  /** Control which menu items are visible in the UI. */
+  menuVisibility?: {
+    channels?: boolean;
+    agents?: boolean;
+    sessions?: boolean;
+    skills?: boolean;
+    tools?: boolean;
+    models?: boolean;
+    config?: boolean;
+    nodes?: boolean;
+    communications?: boolean;
+    appearance?: boolean;
+    automation?: boolean;
+    infrastructure?: boolean;
+    aiAgents?: boolean;
+    debug?: boolean;
+    logs?: boolean;
+    docs?: boolean;
+  };
 };
 
 export type GatewayAuthMode = "none" | "token" | "password" | "trusted-proxy";

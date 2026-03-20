@@ -482,12 +482,27 @@ export function renderApp(state: AppViewState) {
             </div>
             <div class="sidebar-shell__body">
               <nav class="sidebar-nav">
-                ${TAB_GROUPS.map((group) => {
-                  const isGroupCollapsed = state.settings.navGroupsCollapsed[group.label] ?? false;
-                  const hasActiveTab = group.tabs.some((tab) => tab === state.tab);
-                  const showItems = navCollapsed || hasActiveTab || !isGroupCollapsed;
+                ${(() => {
+                  const config = state.configSnapshot?.config as {
+                    gateway?: {
+                      controlUi?: { menuVisibility?: Record<string, boolean | undefined> };
+                    };
+                  } | null;
+                  const menuVisibility = config?.gateway?.controlUi?.menuVisibility;
+                  const isTabVisible = (tabKey: string): boolean => {
+                    return menuVisibility?.[tabKey] !== false;
+                  };
+                  const filteredTabGroups = TAB_GROUPS.map((group) => ({
+                    ...group,
+                    tabs: group.tabs.filter((tab) => isTabVisible(tab)),
+                  })).filter((group) => group.tabs.length > 0);
+                  return html`${filteredTabGroups.map((group) => {
+                    const isGroupCollapsed =
+                      state.settings.navGroupsCollapsed[group.label] ?? false;
+                    const hasActiveTab = group.tabs.some((tab) => tab === state.tab);
+                    const showItems = navCollapsed || hasActiveTab || !isGroupCollapsed;
 
-                  return html`
+                    return html`
                     <section class="nav-section ${!showItems ? "nav-section--collapsed" : ""}">
                       ${
                         !navCollapsed
@@ -517,28 +532,42 @@ export function renderApp(state: AppViewState) {
                       </div>
                     </section>
                   `;
-                })}
+                  })}`;
+                })()}
               </nav>
             </div>
             <div class="sidebar-shell__footer">
               <div class="sidebar-utility-group">
-                <a
-                  class="nav-item nav-item--external sidebar-utility-link"
-                  href="https://docs.openclaw.ai"
-                  target=${EXTERNAL_LINK_TARGET}
-                  rel=${buildExternalLinkRel()}
-                  title="${t("common.docs")} (opens in new tab)"
-                >
-                  <span class="nav-item__icon" aria-hidden="true">${icons.book}</span>
-                  ${
-                    !navCollapsed
-                      ? html`
-                          <span class="nav-item__text">${t("common.docs")}</span>
-                          <span class="nav-item__external-icon">${icons.externalLink}</span>
-                        `
-                      : nothing
-                  }
-                </a>
+                ${(() => {
+                  const config = state.configSnapshot?.config as {
+                    gateway?: {
+                      controlUi?: { menuVisibility?: Record<string, boolean | undefined> };
+                    };
+                  } | null;
+                  const menuVisibility = config?.gateway?.controlUi?.menuVisibility;
+                  const docsVisible = menuVisibility?.docs !== false;
+                  return docsVisible
+                    ? html`
+                        <a
+                          class="nav-item nav-item--external sidebar-utility-link"
+                          href="https://docs.openclaw.ai"
+                          target=${EXTERNAL_LINK_TARGET}
+                          rel=${buildExternalLinkRel()}
+                          title="${t("common.docs")} (opens in new tab)"
+                        >
+                          <span class="nav-item__icon" aria-hidden="true">${icons.book}</span>
+                          ${
+                            !navCollapsed
+                              ? html`
+                                  <span class="nav-item__text">${t("common.docs")}</span>
+                                  <span class="nav-item__external-icon">${icons.externalLink}</span>
+                                `
+                              : nothing
+                          }
+                        </a>
+                      `
+                    : nothing;
+                })()}
                 <div class="sidebar-mode-switch">
                   ${renderTopbarThemeModeToggle(state)}
                 </div>
