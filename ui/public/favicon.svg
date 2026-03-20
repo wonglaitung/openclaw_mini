@@ -1,22 +1,49 @@
 <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="lobster-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#ff4d4d"/>
-      <stop offset="100%" stop-color="#991b1b"/>
+    <linearGradient id="robot-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#22c55e"/>
+      <stop offset="100%" stop-color="#14532d"/>
+    </linearGradient>
+    <linearGradient id="robot-light-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4ade80"/>
+      <stop offset="100%" stop-color="#22c55e"/>
     </linearGradient>
   </defs>
-  <!-- Body -->
-  <path d="M60 10 C30 10 15 35 15 55 C15 75 30 95 45 100 L45 110 L55 110 L55 100 C55 100 60 102 65 100 L65 110 L75 110 L75 100 C90 95 105 75 105 55 C105 35 90 10 60 10Z" fill="url(#lobster-gradient)"/>
-  <!-- Left Claw -->
-  <path d="M20 45 C5 40 0 50 5 60 C10 70 20 65 25 55 C28 48 25 45 20 45Z" fill="url(#lobster-gradient)"/>
-  <!-- Right Claw -->
-  <path d="M100 45 C115 40 120 50 115 60 C110 70 100 65 95 55 C92 48 95 45 100 45Z" fill="url(#lobster-gradient)"/>
+  <!-- Head -->
+  <rect x="28" y="25" width="64" height="52" rx="14" fill="url(#robot-gradient)"/>
+  
   <!-- Antenna -->
-  <path d="M45 15 Q35 5 30 8" stroke="#ff4d4d" stroke-width="3" stroke-linecap="round"/>
-  <path d="M75 15 Q85 5 90 8" stroke="#ff4d4d" stroke-width="3" stroke-linecap="round"/>
-  <!-- Eyes -->
-  <circle cx="45" cy="35" r="6" fill="#050810"/>
-  <circle cx="75" cy="35" r="6" fill="#050810"/>
-  <circle cx="46" cy="34" r="2.5" fill="#00e5cc"/>
-  <circle cx="76" cy="34" r="2.5" fill="#00e5cc"/>
+  <rect x="54" y="10" width="12" height="15" rx="3" fill="url(#robot-gradient)"/>
+  <circle cx="60" cy="8" r="6" fill="url(#robot-light-gradient)"/>
+  
+  <!-- Eyes (Large and expressive) -->
+  <ellipse cx="45" cy="50" rx="10" ry="12" fill="#0f172a"/>
+  <ellipse cx="75" cy="50" rx="10" ry="12" fill="#0f172a"/>
+  <ellipse cx="47" cy="48" rx="6" ry="7" fill="#4ade80"/>
+  <ellipse cx="77" cy="48" rx="6" ry="7" fill="#4ade80"/>
+  
+  <!-- Eye Sparkles -->
+  <circle cx="44" cy="45" r="2" fill="#ffffff" opacity="0.9"/>
+  <circle cx="50" cy="51" r="1" fill="#ffffff" opacity="0.6"/>
+  <circle cx="74" cy="45" r="2" fill="#ffffff" opacity="0.9"/>
+  <circle cx="80" cy="51" r="1" fill="#ffffff" opacity="0.6"/>
+  
+  <!-- Cheeks -->
+  <ellipse cx="35" cy="62" rx="4" ry="2" fill="#4ade80" opacity="0.4"/>
+  <ellipse cx="85" cy="62" rx="4" ry="2" fill="#4ade80" opacity="0.4"/>
+  
+  <!-- Mouth -->
+  <path d="M52 65 Q60 72 68 65" stroke="#0f172a" stroke-width="3" stroke-linecap="round" fill="none"/>
+  
+  <!-- Neck -->
+  <rect x="50" y="77" width="20" height="10" rx="3" fill="url(#robot-gradient)"/>
+  
+  <!-- Body -->
+  <rect x="22" y="87" width="76" height="32" rx="8" fill="url(#robot-gradient)"/>
+  
+  <!-- Chest Display -->
+  <rect x="35" y="94" width="50" height="18" rx="4" fill="#064e3b" opacity="0.4"/>
+  <circle cx="45" cy="103" r="4" fill="#4ade80"/>
+  <circle cx="60" cy="103" r="4" fill="#86efac"/>
+  <circle cx="75" cy="103" r="4" fill="#4ade80"/>
 </svg>

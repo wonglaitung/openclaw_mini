@@ -263,3 +263,78 @@
   - 修改 UI 渲染逻辑需要重新构建（pnpm ui:build）
   - 修改后端配置处理需要重新构建（pnpm build）
   - 配置文件修改只需重启 gateway
+
+## 2026-03-20 - 工具权限配置优化
+- 问题：配置文件中的 profile 和 allow 配置冲突
+  - 全局设置 `profile: "minimal"` 和 `allow: ["bash", "read", "write", "edit"]`
+  - Agent 未设置 tools.allow，系统使用 profile
+  - 页面显示 profile 为 "full"（默认值），工具权限不符合预期
+  - 出现 "Global tools.allow is set. Agent overrides cannot enable tools that are globally blocked." 警告
+- 解决方案：移除 profile，只在 agent 中设置 tools.allow
+  - 从全局配置中移除 `profile: "minimal"` 和 `tools.allow`
+  - 在 default agent 中添加 `tools.allow: ["bash", "read", "write", "edit"]`
+- 权限优先级：
+  1. Agent 级别的 `tools.allow`（最高优先级）
+  2. Profile 的 `allow`（如果 agent 没有 allow）
+  3. 全局的 `allow`（被 profile 覆盖）
+- pathPrepend 路径优化：
+  - 之前：`["/mnt/d/bank/scripts", "/mnt/d/bank/tools"]`（绝对路径）
+  - 现在：`["scripts", "tools"]`（相对路径）
+  - 基于 gateway 进程工作目录（/data/openclaw_mini）解析
+  - 更简洁、更易移植、不依赖具体挂载点
+- 工具名称别名映射：
+  - 配置中的 `bash` 映射为实际的 `exec` 工具
+  - 页面显示实际工具名称而非别名
+- 启动指令：
+  - 使用 `OPENCLAW_CONFIG_PATH=configs/offline-bank.json node openclaw.mjs gateway run --port 18789`
+  - 确保使用项目配置文件而非用户配置目录的配置
+- 日期：2026-03-20
+
+## 2026-03-20 - UI 品牌自定义
+- 浏览器标签页标题：`OpenClaw Control` → `AI Assistant GUI`
+  - 修改文件：ui/index.html
+- 侧边栏标题：`控制 OpenClaw` → `AI Assistant`
+  - 修改文件：ui/src/ui/app-render.ts（移除 eyebrow，更新 title）
+- 面包屑导航：`OpenClaw›聊天` → `Assistant›聊天`
+  - 修改文件：ui/src/ui/components/dashboard-header.ts
+- 登录页面标题：`OpenClaw` → `AI Assistant`
+  - 修改文件：ui/src/ui/views/login-gate.ts
+- 登录页面副标题：`Gateway Dashboard` / `网关仪表盘` / `閘道儀表板` → `GUI`
+  - 修改文件：ui/src/i18n/locales/en.ts / zh-CN.ts / zh-TW.ts
+- Token 输入框 placeholder：`OPENCLAW_GATEWAY_TOKEN` → `GATEWAY_TOKEN`
+  - 修改文件：ui/src/ui/views/login-gate.ts 和 ui/src/ui/views/overview.ts
+- 构建和部署：
+  - 修改 UI 代码后运行 `pnpm ui:build`
+  - 刷新浏览器即可看到效果，无需重启 gateway
+- 日期：2026-03-20
+
+## 2026-03-20 - 登录页面简化
+- 删除内容：
+  - "How to connect" 标题和帮助部分
+  - 三个连接步骤（openclaw gateway run, openclaw dashboard --no-open）
+  - "Read the docs" 链接（https://docs.openclaw.ai/web/dashboard）
+- 保留内容：
+  - Logo、标题 "AI Assistant"、副标题 "GUI"
+  - WS URL 输入框
+  - Token 输入框（placeholder: GATEWAY_TOKEN (可选)）
+  - Password 输入框
+  - 连接按钮
+- 修改文件：ui/src/ui/views/login-gate.ts
+- 构建和部署：
+  - 修改 UI 代码后运行 `pnpm ui:build`
+  - 刷新浏览器即可看到简化后的登录界面
+- 日期：2026-03-20
+
+## 2026-03-20 - 菜单可见性扩展
+- 添加 `instances` 菜单项支持
+- 修改文件：
+  - src/config/types.gateway.ts：在 menuVisibility 类型中添加 `instances?: boolean`
+  - src/config/zod-schema.ts：添加 Zod 验证规则 `instances: z.boolean().optional()`
+  - configs/offline-bank.json：设置 `"instances": false` 隐藏实例菜单
+- 构建和部署：
+  - 修改后端代码后运行 `pnpm build`
+  - 重启 gateway 使配置生效
+- 当前菜单显示状态：
+  - ✅ 显示：配置、代理、日志
+  - ❌ 隐藏：频道、技能、节点、工具、模型、会话、实例、通讯、外观、自动化、基础设施、AI 代理、调试、文档
+- 日期：2026-03-20
