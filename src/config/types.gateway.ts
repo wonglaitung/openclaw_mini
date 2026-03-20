@@ -472,4 +472,32 @@ export type GatewayConfig = {
    * the rolling window expires. Default: 10.
    */
   channelMaxRestartsPerHour?: number;
+  /**
+   * Audit logging configuration for agent operations.
+   * Important for security-sensitive environments like banking.
+   */
+  audit?: GatewayAuditConfig;
+};
+
+/**
+ * Audit logging configuration for agent operations.
+ * Provides structured audit logs for tool calls, decisions, and actions.
+ */
+export type GatewayAuditConfig = {
+  /** Enable audit logging (default: false). */
+  enabled?: boolean;
+  /**
+   * Audit log file path (relative to state directory).
+   * Default: "audit.log".
+   */
+  file?: string;
+  /**
+   * Audit detail level:
+   * - none: disabled
+   * - basic: only tool call names
+   * - detailed: tool calls + results
+   * - verbose: full parameters and results
+   * Default: "detailed".
+   */
+  level?: "none" | "basic" | "detailed" | "verbose";
 };

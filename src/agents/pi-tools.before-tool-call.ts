@@ -1,4 +1,5 @@
 import type { ToolLoopDetectionConfig } from "../config/types.tools.js";
+import { auditToolBlocked, auditToolCallBasic, auditToolResult } from "../logging/audit.js";
 import type { SessionState } from "../logging/diagnostic-session-state.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { getGlobalHookRunner } from "../plugins/hook-runner-global.js";
@@ -108,6 +109,16 @@ export async function runBeforeToolCallHook(args: {
     if (loopResult.stuck) {
       if (loopResult.level === "critical") {
         log.error(`Blocking ${toolName} due to critical loop: ${loopResult.message}`);
+        auditToolBlocked({
+          sessionId: args.ctx?.sessionId,
+          sessionKey: args.ctx?.sessionKey,
+          runId: args.ctx?.runId,
+          agentId: args.ctx?.agentId,
+          toolName,
+          toolCallId: args.toolCallId,
+          reason: loopResult.message,
+          params: isPlainObject(params) ? params : undefined,
+        });
         logToolLoopAction({
           sessionKey: args.ctx.sessionKey,
           sessionId: args.ctx?.agentId,
@@ -203,15 +214,39 @@ export function wrapToolWithBeforeToolCallHook(
   const wrappedTool: AnyAgentTool = {
     ...tool,
     execute: async (toolCallId, params, signal, onUpdate) => {
+      const startTime = Date.now();
       const outcome = await runBeforeToolCallHook({
         toolName,
         params,
         toolCallId,
         ctx,
       });
+
       if (outcome.blocked) {
+        auditToolBlocked({
+          sessionId: ctx?.sessionId,
+          sessionKey: ctx?.sessionKey,
+          runId: ctx?.runId,
+          agentId: ctx?.agentId,
+          toolName: normalizeToolName(toolName),
+          toolCallId,
+          reason: outcome.reason,
+          params: isPlainObject(params) ? params : undefined,
+        });
         throw new Error(outcome.reason);
       }
+
+      // Log tool call execution
+      auditToolCallBasic({
+        sessionId: ctx?.sessionId,
+        sessionKey: ctx?.sessionKey,
+        runId: ctx?.runId,
+        agentId: ctx?.agentId,
+        toolName: normalizeToolName(toolName),
+        toolCallId,
+        params: isPlainObject(params) ? params : { value: String(params) },
+      });
+
       if (toolCallId) {
         const adjustedParamsKey = buildAdjustedParamsKey({ runId: ctx?.runId, toolCallId });
         adjustedParamsByToolCallId.set(adjustedParamsKey, outcome.params);
@@ -225,6 +260,8 @@ export function wrapToolWithBeforeToolCallHook(
       const normalizedToolName = normalizeToolName(toolName || "tool");
       try {
         const result = await execute(toolCallId, outcome.params, signal, onUpdate);
+        const duration = Date.now() - startTime;
+
         await recordLoopOutcome({
           ctx,
           toolName: normalizedToolName,
@@ -232,8 +269,36 @@ export function wrapToolWithBeforeToolCallHook(
           toolCallId,
           result,
         });
+
+        // Log tool result
+        if (typeof result === "object" && result !== null && "error" in result) {
+          auditToolResult({
+            sessionId: ctx?.sessionId,
+            sessionKey: ctx?.sessionKey,
+            runId: ctx?.runId,
+            agentId: ctx?.agentId,
+            toolName: normalizedToolName,
+            toolCallId,
+            error: String(result.error),
+            duration,
+          });
+        } else {
+          auditToolResult({
+            sessionId: ctx?.sessionId,
+            sessionKey: ctx?.sessionKey,
+            runId: ctx?.runId,
+            agentId: ctx?.agentId,
+            toolName: normalizedToolName,
+            toolCallId,
+            result: isPlainObject(result) ? result : { value: JSON.stringify(result) },
+            duration,
+          });
+        }
+
         return result;
       } catch (err) {
+        const duration = Date.now() - startTime;
+
         await recordLoopOutcome({
           ctx,
           toolName: normalizedToolName,
@@ -241,6 +306,19 @@ export function wrapToolWithBeforeToolCallHook(
           toolCallId,
           error: err,
         });
+
+        // Log tool error
+        auditToolResult({
+          sessionId: ctx?.sessionId,
+          sessionKey: ctx?.sessionKey,
+          runId: ctx?.runId,
+          agentId: ctx?.agentId,
+          toolName: normalizedToolName,
+          toolCallId,
+          error: String(err),
+          duration,
+        });
+
         throw err;
       }
     },
