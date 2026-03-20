@@ -59,7 +59,7 @@
   "tools": {
     "exec": {
       "security": "allowlist",
-      "safeBins": ["python", "python3", "node", "npm", "powershell", "pwsh"],
+      "safeBins": ["python", "python3", "node", "npm", "powershell", "pwsh", "cmd", "cmd.exe"],
       "pathPrepend": ["scripts", "tools"],
       "ask": "off"
     },
