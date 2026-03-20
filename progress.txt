@@ -13,3 +13,29 @@
 - 分析 OpenClaw 核心架构，评估内网删减版可行性
 - 可行性评分：8/10（配置方案可行，无需修改代码）
 - 生成最小化配置文件和 Windows 部署脚本
+
+## 2026-03-20 - 方案重新评估
+- 重新评估删减版方案完整性
+- 综合评分：8.5/10（功能完整、安全可控、易于部署）
+- 识别遗漏项：配置验证脚本、健康检查脚本
+- 安全性评估：工具白名单 + 工作区限制 + 本地回环访问
+
+## 2026-03-20 - 本地 LLM 配置调整
+- 用户反馈：不使用 Ollama，改用本地 OpenAI 兼容接口
+- 更新配置文件 `configs/offline-bank.json`：
+  - 替换 Ollama 配置为 OpenAI 兼容接口
+  - 设置 baseUrl: `http://127.0.0.1:8000/v1`
+  - 使用 api: `openai-completions`
+  - 配置模型参数：contextWindow: 32768, maxTokens: 8192
+- 更新插件配置：移除 `ollama` 插件
+
+## 2026-03-20 - Python 脚本替换 PowerShell
+- 用户反馈：银行系统禁止运行 PowerShell，使用 Python
+- 创建 Python 安装脚本：`scripts/install-offline-windows.py`
+- 创建 Python 启动脚本：`scripts/start-offline-windows.py`
+- 删除旧的 PowerShell 脚本
+- 更新文档 `scripts/README-OFFLINE.md`：
+  - 修改安装步骤为 Python 脚本
+  - 添加本地 OpenAI 兼容接口要求
+  - 更新故障排除部分
+  - 移除 Ollama 相关内容

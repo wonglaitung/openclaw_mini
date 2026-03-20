@@ -8,7 +8,7 @@
 
 - 无外部网络依赖
 - 无消息渠道（WhatsApp/Telegram 等）
-- 使用本地 Ollama 模型
+- 使用本地 OpenAI 兼容的 LLM 服务
 - 无 Docker 沙箱
 - 仅通过 Web UI/CLI 交互
 
@@ -20,12 +20,13 @@
 
 - Windows 10/11 或 Windows Server 2016+
 - Node.js 22+ (https://nodejs.org/)
-- PowerShell 5.1+
+- Python 3.8+ (用于运行安装脚本)
 
-### Ollama（可选但推荐）
+### 本地 LLM 服务
 
-- 下载安装：https://ollama.ai/download
-- 推荐模型：`ollama pull llama3.2:70b-instruct`
+- 提供 OpenAI 兼容的 `/v1/chat/completions` 接口
+- 监听地址：`http://127.0.0.1:8000`（可自定义）
+- 支持的模型：Qwen、Llama、DeepSeek 等
 
 ---
 
@@ -33,59 +34,40 @@
 
 ### 1. 自动安装（推荐）
 
-```powershell
-# 以管理员身份运行 PowerShell
-cd C:\openclaw
-.\scripts\install-offline-windows.ps1
+```bash
+# 以管理员身份运行
+python scripts/install-offline-windows.py
 ```
-
-**参数说明**：
-
-- `--SkipOllama` - 跳过 Ollama 检查
-- `--SkipService` - 跳过 Windows 服务创建
 
 ### 2. 手动安装
 
-```powershell
+```bash
 # 1. 安装 OpenClaw
 npm install -g openclaw@latest
 
 # 2. 创建配置目录
-mkdir $env:USERPROFILE\.openclaw
+mkdir %USERPROFILE%\.openclaw
 
 # 3. 复制配置文件
-copy configs\offline-bank.json $env:USERPROFILE\.openclaw\openclaw.json
+copy configs\offline-bank.json %USERPROFILE%\.openclaw\openclaw.json
 ```
 
 ---
 
 ## 启动方式
 
-### 方式 1：直接启动
+### 方式 1：Python 脚本启动
 
-```powershell
-.\scripts\start-offline-windows.ps1
+```bash
+python scripts/start-offline-windows.py
 ```
 
-### 方式 2：使用 Windows 服务
+### 方式 2：手动命令
 
-```powershell
-# 启动服务
-Start-Service OpenClawGateway
-
-# 停止服务
-Stop-Service OpenClawGateway
-
-# 查看状态
-Get-Service OpenClawGateway
-```
-
-### 方式 3：手动命令
-
-```powershell
+```bash
 # 设置环境变量
-$env:OPENCLAW_SKIP_CHANNELS = "1"
-$env:OPENCLAW_UPDATE_CHECK = "0"
+set OPENCLAW_SKIP_CHANNELS=1
+set OPENCLAW_UPDATE_CHECK=0
 
 # 启动 Gateway
 openclaw gateway run --bind 127.0.0.1 --port 18789
@@ -101,7 +83,7 @@ openclaw gateway run --bind 127.0.0.1 --port 18789
 
 ### CLI 命令
 
-```powershell
+```bash
 # 发送消息
 openclaw agent --message "分析当前目录的文件"
 
@@ -118,11 +100,23 @@ openclaw agent --message "运行 D:\bank\scripts\data-cleaning.py"
 ```json
 {
   "agent": {
-    "model": "ollama/llama3.2:70b-instruct"
+    "model": "local-openai/qwen2.5-72b-instruct"
   },
-  "plugins": {
-    "allow": ["ollama", "memory-core", "memory-lancedb"],
-    "deny": ["*"]
+  "models": {
+    "providers": {
+      "local-openai": {
+        "baseUrl": "http://127.0.0.1:8000/v1",
+        "apiKey": "sk-dummy",
+        "api": "openai-completions",
+        "models": [
+          {
+            "id": "qwen2.5-72b-instruct",
+            "contextWindow": 32768,
+            "maxTokens": 8192
+          }
+        ]
+      }
+    }
   },
   "agents": {
     "defaults": {
@@ -136,6 +130,29 @@ openclaw agent --message "运行 D:\bank\scripts\data-cleaning.py"
       "security": "allowlist",
       "safeBins": ["python", "node", "powershell"],
       "pathPrepend": ["D:\\bank\\scripts"]
+    }
+  }
+}
+```
+
+### 本地 LLM 服务配置
+
+根据你的实际模型服务修改：
+
+```json
+{
+  "models": {
+    "providers": {
+      "local-openai": {
+        "baseUrl": "http://你的服务地址:端口/v1",
+        "models": [
+          {
+            "id": "你的模型名称",
+            "contextWindow": 32768,
+            "maxTokens": 8192
+          }
+        ]
+      }
     }
   }
 }
@@ -182,32 +199,45 @@ openclaw agent --message "运行 D:\bank\scripts\data-cleaning.py"
 
 ---
 
-## 离线安装包
+## 本地 LLM 服务要求
 
-如需完全离线部署，准备以下文件：
+### API 接口
 
-1. **OpenClaw npm 包**
+本地服务需提供 **OpenAI 兼容的 API**：
 
-   ```bash
-   npm pack openclaw
-   ```
+```
+POST /v1/chat/completions
+Content-Type: application/json
 
-2. **Ollama Windows 安装包**
-   - 下载：https://ollama.ai/download
+{
+  "model": "your-model-name",
+  "messages": [
+    {"role": "user", "content": "Hello"}
+  ]
+}
+```
 
-3. **Ollama 模型文件**
+### 响应格式
 
-   ```bash
-   ollama pull llama3.2:70b-instruct
-   # 模型存储在 ~/.ollama/models/
-   ```
+```json
+{
+  "choices": [
+    {
+      "message": {
+        "role": "assistant",
+        "content": "Hello! How can I help you?"
+      }
+    }
+  ]
+}
+```
 
-4. **配置文件**
-   - `configs/offline-bank.json`
+### 推荐的本地 LLM 服务
 
-5. **安装脚本**
-   - `scripts/install-offline-windows.ps1`
-   - `scripts/start-offline-windows.ps1`
+- **vLLM** - https://github.com/vllm-project/vllm
+- **SGLang** - https://github.com/sgl-project/sglang
+- **LM Studio** - https://lmstudio.ai/
+- **Ollama** - https://ollama.com/ (需配置 OpenAI 兼容模式)
 
 ---
 
@@ -215,26 +245,26 @@ openclaw agent --message "运行 D:\bank\scripts\data-cleaning.py"
 
 ### 问题 1：端口被占用
 
-```powershell
+```bash
 # 检查端口占用
 netstat -an | findstr 18789
 
 # 修改配置文件中的端口号
 ```
 
-### 问题 2：Ollama 未运行
+### 问题 2：本地 LLM 服务未运行
 
-```powershell
-# 启动 Ollama
-ollama serve
+```bash
+# 检查服务状态
+curl http://127.0.0.1:8000/v1/models
 
-# 检查模型列表
-ollama list
+# 检查服务日志
+# （根据你的 LLM 服务查看日志）
 ```
 
 ### 问题 3：配置文件错误
 
-```powershell
+```bash
 # 验证配置文件
 openclaw config validate
 
@@ -242,19 +272,24 @@ openclaw config validate
 openclaw config get
 ```
 
-### 问题 4：权限问题
+### 问题 4：Python 脚本无法运行
 
-```powershell
-# 以管理员身份运行 PowerShell
-# 检查目录权限
-icacls "C:\Program Files\openclaw"
+```bash
+# 检查 Python 版本
+python --version
+
+# 如果是 Python 2，尝试使用 python3
+python3 scripts/install-offline-windows.py
+
+# 或直接使用 py 命令
+py scripts/install-offline-windows.py
 ```
 
 ---
 
 ## 验证安装
 
-```powershell
+```bash
 # 1. 检查 OpenClaw 版本
 openclaw --version
 
@@ -272,26 +307,22 @@ openclaw agent --message "列出当前目录"
 
 ## 日志位置
 
-- **OpenClaw 日志**：`$env:USERPROFILE\.openclaw\logs\`
-- **Ollama 日志**：`$env:USERPROFILE\.ollama\logs\`
+- **OpenClaw 日志**：`%USERPROFILE%\.openclaw\logs\`
+- **本地 LLM 日志**：根据你的 LLM 服务配置
 
 ---
 
 ## 卸载
 
-```powershell
-# 1. 停止并删除服务
-Stop-Service OpenClawGateway
-nssm remove OpenClawGateway confirm
-
-# 2. 卸载 OpenClaw
+```bash
+# 1. 卸载 OpenClaw
 npm uninstall -g openclaw
 
-# 3. 删除配置文件
-Remove-Item -Recurse -Force $env:USERPROFILE\.openclaw
+# 2. 删除配置文件
+rmdir /s /q %USERPROFILE%\.openclaw
 
-# 4. 删除 Ollama（可选）
-ollama uninstall
+# 3. 停止本地 LLM 服务
+# （根据你的 LLM 服务停止方式）
 ```
 
 ---
