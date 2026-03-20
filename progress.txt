@@ -39,3 +39,9 @@
   - 添加本地 OpenAI 兼容接口要求
   - 更新故障排除部分
   - 移除 Ollama 相关内容
+
+## 2026-03-20 - Git 远端配置调整
+- 用户尝试推送到官方仓库遇到权限错误
+- 协助用户将 origin 远端从官方仓库改为用户 fork
+- 新远端 URL: `https://github.com/wonglaitung/openclaw_mini.git`
+- 确认本地分支领先远端 2 个提交
