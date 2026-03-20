@@ -338,3 +338,67 @@
   - ✅ 显示：配置、代理、日志
   - ❌ 隐藏：频道、技能、节点、工具、模型、会话、实例、通讯、外观、自动化、基础设施、AI 代理、调试、文档
 - 日期：2026-03-20
+
+## 2026-03-20 - 图标更换为绿色机器人
+- 需求：将 OpenClaw 的红色龙虾图标替换为机器人图标
+- 实现：创建深绿色主题的可爱机器人 SVG 图标
+  - 特点：绿色渐变、大眼睛、星光效果、腮红、微笑嘴型、胸部控制灯
+- 图标文件：ui/public/favicon.svg
+- 应用位置：登录页面 Logo、侧边栏 Logo、聊天界面助手头像
+- 构建和部署：
+  - 修改 SVG 文件后运行 `pnpm ui:build`
+  - 刷新浏览器即可看到新图标
+- 提交：commit e0ec972e9
+- 日期：2026-03-20
+
+## 2026-03-20 - 审计日志功能实现
+- 需求背景：银行需要完整的操作审计轨迹，代理自主操作需要详细记录
+- 实现方案：混合方案（主日志 + 独立审计日志 + 配置控制）
+- 核心实现：
+  1. 创建审计日志模块 `src/logging/audit.ts`：
+     - 支持结构化 JSON 格式审计日志
+     - 四个审计级别：none/basic/detailed/verbose
+     - 独立日志文件（默认 `audit.log`）
+     - 自动流管理和进程退出清理
+  2. 配置类型扩展 `src/config/types.gateway.ts`：
+     - 添加 `GatewayAuditConfig` 类型
+     - 支持 enabled/file/level 配置
+  3. 工具调用集成 `src/agents/pi-tools.before-tool-call.ts`：
+     - 记录所有工具调用（工具名称、参数、时间戳）
+     - 记录工具执行结果（成功/失败、耗时）
+     - 记录安全策略阻止（工具被阻止原因）
+  4. Gateway 启动集成 `src/gateway/server.impl.ts`：
+     - 启动时根据配置初始化审计日志
+     - 记录审计日志启用状态
+  5. 配置文件更新 `configs/offline-bank.json`：
+     - 启用审计日志：`enabled: true`
+     - 设置日志文件：`file: "audit.log"`
+     - 设置详细级别：`level: "detailed"`
+- 审计日志格式（JSON 每行一条）：
+  ```json
+  {
+    "timestamp": "2026-03-20T12:00:00.000Z",
+    "sessionId": "xxx",
+    "sessionKey": "xxx",
+    "runId": "xxx",
+    "agentId": "default",
+    "type": "tool_call",
+    "toolName": "read",
+    "toolCallId": "call_123",
+    "action": "execute",
+    "status": "success",
+    "params": {...},
+    "duration": 123
+  }
+  ```
+- 日志文件位置：`~/.openclaw/audit.log`（可配置）
+- 优点：
+  - ✅ 满足银行审计需求（结构化、独立文件）
+  - ✅ 不影响现有系统（主日志保持不变）
+  - ✅ 灵活可控（可配置级别和位置）
+  - ✅ 易于分析和检索（JSON 格式）
+- 构建和部署：
+  - 修改后端代码后运行 `pnpm build`
+  - 重启 gateway 使配置生效
+  - 审计日志自动写入，无需额外配置
+- 日期：2026-03-20

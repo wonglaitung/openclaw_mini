@@ -48,6 +48,7 @@ import {
 } from "../infra/skills-remote.js";
 import { enqueueSystemEvent } from "../infra/system-events.js";
 import { scheduleGatewayUpdateCheck } from "../infra/update-startup.js";
+import { setAuditConfig } from "../logging/audit.js";
 import { startDiagnosticHeartbeat, stopDiagnosticHeartbeat } from "../logging/diagnostic.js";
 import { createSubsystemLogger, runtimeForLogger } from "../logging/subsystem.js";
 import { resolveConfiguredDeferredChannelPluginIds } from "../plugins/channel-plugin-ids.js";
@@ -513,6 +514,20 @@ export async function startGatewayServer(
   if (diagnosticsEnabled) {
     startDiagnosticHeartbeat();
   }
+
+  // Initialize audit logging if enabled
+  const auditConfig = cfgAtStart.gateway?.audit;
+  if (auditConfig?.enabled) {
+    setAuditConfig({
+      enabled: true,
+      file: auditConfig.file || "audit.log",
+      level: auditConfig.level || "detailed",
+    });
+    log.info(
+      `gateway: audit logging enabled (file=${auditConfig.file || "audit.log"}, level=${auditConfig.level || "detailed"})`,
+    );
+  }
+
   setGatewaySigusr1RestartPolicy({ allowExternal: isRestartEnabled(cfgAtStart) });
   setPreRestartDeferralCheck(
     () => getTotalQueueSize() + getTotalPendingReplies() + getActiveEmbeddedRunCount(),
