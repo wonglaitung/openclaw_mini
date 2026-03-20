@@ -401,4 +401,21 @@
   - 修改后端代码后运行 `pnpm build`
   - 重启 gateway 使配置生效
   - 审计日志自动写入，无需额外配置
+- 遇到的问题和解决：
+  - 问题：TypeScript 类型错误（`setAuditConfig` 未导入）
+  - 解决：移除未使用的导入，只导入需要的函数
+  - 问题：配置验证失败（"Unrecognized key: 'audit'"）
+  - 解决：在 `zod-schema.ts` 中添加 `audit` 字段验证
+  - 问题：模板字符串类型错误（`err` 类型未知）
+  - 解决：使用 `String(err)` 明确转换
+  - 问题：对象字符串化警告（`String(result)`）
+  - 解决：使用 `JSON.stringify(result)` 避免对象默认字符串化
+- 提交：
+  - 768d39d5a: feat: add comprehensive audit logging for tool operations and agent decisions
+  - e4d9723c2: fix: add audit configuration to gateway Zod schema validation
+- 验证结果：
+  - ✅ Gateway 成功启动并显示：`audit logging enabled (file=audit.log, level=detailed)`
+  - ✅ 所有 lint、format、tsgo 检查通过
+  - ✅ 配置验证通过
+  - ✅ 审计日志文件准备就绪：`~/.openclaw/audit.log`
 - 日期：2026-03-20
