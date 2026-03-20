@@ -125,6 +125,7 @@ export type GatewayControlUiConfig = {
     channels?: boolean;
     agents?: boolean;
     sessions?: boolean;
+    instances?: boolean;
     skills?: boolean;
     tools?: boolean;
     models?: boolean;
