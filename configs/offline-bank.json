@@ -49,13 +49,14 @@
         "model": {
           "primary": "local-openai/qwen3.5-plus"
         },
-        "skills": []
+        "skills": [],
+        "tools": {
+          "allow": ["bash", "read", "write", "edit"]
+        }
       }
     ]
   },
   "tools": {
-    "profile": "minimal",
-    "allow": ["bash", "read", "write", "edit"],
     "exec": {
       "security": "allowlist",
       "safeBins": ["python", "python3", "node", "npm", "powershell", "pwsh"],
