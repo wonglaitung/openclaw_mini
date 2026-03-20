@@ -1,54 +1,74 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { auditToolCallBasic } from "../logging/audit.js";
+import { createSubsystemLogger } from "../logging/subsystem.js";
 
-export function resolvePowerShellPath(): string {
-  // Prefer PowerShell 7 when available; PS 5.1 lacks "&&" support.
-  const programFiles = process.env.ProgramFiles || process.env.PROGRAMFILES || "C:\\Program Files";
-  const pwsh7 = path.join(programFiles, "PowerShell", "7", "pwsh.exe");
-  if (fs.existsSync(pwsh7)) {
-    return pwsh7;
-  }
+const log = createSubsystemLogger("shell");
 
-  const programW6432 = process.env.ProgramW6432;
-  if (programW6432 && programW6432 !== programFiles) {
-    const pwsh7Alt = path.join(programW6432, "PowerShell", "7", "pwsh.exe");
-    if (fs.existsSync(pwsh7Alt)) {
-      return pwsh7Alt;
-    }
+/**
+ * Test if PowerShell can execute a simple command
+ */
+function testPowerShellExecution(pwshPath: string): boolean {
+  try {
+    // Test if PowerShell can execute a simple command
+    const result = spawn(pwshPath, ["-NoProfile", "-NonInteractive", "-Command", "1"], {
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout: 5000,
+    });
+    return result.spawnfile !== undefined;
+  } catch {
+    return false;
   }
-
-  const pwshInPath = resolveShellFromPath("pwsh");
-  if (pwshInPath) {
-    return pwshInPath;
-  }
-
-  const systemRoot = process.env.SystemRoot || process.env.WINDIR;
-  if (systemRoot) {
-    const candidate = path.join(
-      systemRoot,
-      "System32",
-      "WindowsPowerShell",
-      "v1.0",
-      "powershell.exe",
-    );
-    if (fs.existsSync(candidate)) {
-      return candidate;
-    }
-  }
-  return "powershell.exe";
 }
 
-export function getShellConfig(): { shell: string; args: string[] } {
+/**
+ * Check if a shell path is cmd.exe
+ */
+function isCmdExe(shellPath: string): boolean {
+  return shellPath.toLowerCase().endsWith("cmd.exe") || shellPath.toLowerCase().endsWith("cmd");
+}
+
+/**
+ * Get shell configuration for command execution
+ */
+export function getShellConfig(): { shell: string; args: string[]; isPowerShell: boolean } {
   if (process.platform === "win32") {
-    // Use PowerShell instead of cmd.exe on Windows.
-    // Problem: Many Windows system utilities (ipconfig, systeminfo, etc.) write
-    // directly to the console via WriteConsole API, bypassing stdout pipes.
-    // When Node.js spawns cmd.exe with piped stdio, these utilities produce no output.
-    // PowerShell properly captures and redirects their output to stdout.
+    const shellPath = resolvePowerShellPath();
+    const isPowerShell = !isCmdExe(shellPath);
+
+    if (!isPowerShell) {
+      // Using cmd.exe as fallback
+      log.warn(
+        `Using cmd.exe (${shellPath}) instead of PowerShell. Command syntax limitations apply (no && chaining, different env var syntax).`,
+      );
+
+      // Log shell fallback to audit log if available
+      try {
+        auditToolCallBasic({
+          toolName: "shell_fallback",
+          params: {
+            shellUsed: "cmd.exe",
+            reason: "PowerShell unavailable or disabled",
+            timestamp: new Date().toISOString(),
+          },
+        });
+      } catch {
+        // Ignore audit log errors
+      }
+
+      return {
+        shell: shellPath,
+        args: ["/c"],
+        isPowerShell: false,
+      };
+    }
+
+    // Use PowerShell
     return {
-      shell: resolvePowerShellPath(),
+      shell: shellPath,
       args: ["-NoProfile", "-NonInteractive", "-Command"],
+      isPowerShell: true,
     };
   }
 
@@ -58,15 +78,56 @@ export function getShellConfig(): { shell: string; args: string[] } {
   if (shellName === "fish") {
     const bash = resolveShellFromPath("bash");
     if (bash) {
-      return { shell: bash, args: ["-c"] };
+      return { shell: bash, args: ["-c"], isPowerShell: false };
     }
     const sh = resolveShellFromPath("sh");
     if (sh) {
-      return { shell: sh, args: ["-c"] };
+      return { shell: sh, args: ["-c"], isPowerShell: false };
     }
   }
   const shell = envShell && envShell.length > 0 ? envShell : "sh";
-  return { shell, args: ["-c"] };
+  return { shell, args: ["-c"], isPowerShell: false };
+}
+
+export function resolvePowerShellPath(): string {
+  // Prefer PowerShell 7 when available; PS 5.1 lacks "&&" support.
+  const programFiles = process.env.ProgramFiles || process.env.PROGRAMFILES || "C:\\Program Files";
+  const pwsh7 = path.join(programFiles, "PowerShell", "7", "pwsh.exe");
+  if (fs.existsSync(pwsh7) && testPowerShellExecution(pwsh7)) {
+    return pwsh7;
+  }
+
+  const programW6432 = process.env.ProgramW6432;
+  if (programW6432 && programW6432 !== programFiles) {
+    const pwsh7Alt = path.join(programW6432, "PowerShell", "7", "pwsh.exe");
+    if (fs.existsSync(pwsh7Alt) && testPowerShellExecution(pwsh7Alt)) {
+      return pwsh7Alt;
+    }
+  }
+
+  const pwshInPath = resolveShellFromPath("pwsh");
+  if (pwshInPath && testPowerShellExecution(pwshInPath)) {
+    return pwshInPath;
+  }
+
+  const systemRoot = process.env.SystemRoot || process.env.WINDIR || "C:\\Windows";
+  const ps51 = path.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+  if (fs.existsSync(ps51) && testPowerShellExecution(ps51)) {
+    return ps51;
+  }
+
+  // PowerShell not available or disabled - fallback to cmd.exe
+  const cmdPath = path.join(systemRoot, "System32", "cmd.exe");
+  if (fs.existsSync(cmdPath)) {
+    log.warn(
+      "PowerShell not available or disabled, falling back to cmd.exe. Some features may not work correctly.",
+    );
+    return cmdPath;
+  }
+
+  // Last resort
+  log.error("Neither PowerShell nor cmd.exe found. Command execution may fail.");
+  return "cmd.exe";
 }
 
 export function resolveShellFromPath(name: string): string | undefined {
