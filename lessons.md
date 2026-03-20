@@ -2,6 +2,32 @@
 
 ## 2026-03-20
 
+### Git 远端配置经验
+
+**1. Fork 与官方仓库的区分**
+
+- 当修改开源项目时，应先 fork 到个人仓库
+- 推送代码应推送到个人 fork，而非官方仓库
+- 官方仓库通常有权限限制，直接推送会返回 403 错误
+
+**2. Git 远端配置命令**
+
+- 查看远端配置：`git remote -v`
+- 修改远端 URL：`git remote set-url origin <new-url>`
+- 添加额外远端：`git remote add <name> <url>`
+
+**3. 推送到 fork 的工作流程**
+
+- 正常工作流程：fork → clone → 修改 → push 到 fork → 创建 PR
+- 推送命令：`git push origin main` 或 `git push mini main`（如果有多个远端）
+- 创建 PR 需要使用 GitHub 网页界面
+
+**4. 推送前的检查**
+
+- 使用 `git status` 确认工作区干净
+- 使用 `git log` 查看待推送的提交
+- 确认分支名称：`git rev-parse --abbrev-ref HEAD`
+
 ### 内网删减版方案设计经验
 
 **1. 插件化架构的优势**
