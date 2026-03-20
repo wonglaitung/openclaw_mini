@@ -1,0 +1,73 @@
+{
+  "agent": {
+    "model": "ollama/llama3.2:70b-instruct"
+  },
+  "models": {
+    "providers": {
+      "ollama": {
+        "baseUrl": "http://127.0.0.1:11434",
+        "apiKey": "ollama"
+      }
+    }
+  },
+  "plugins": {
+    "enabled": true,
+    "allow": ["ollama", "memory-core", "memory-lancedb"],
+    "deny": ["*"]
+  },
+  "agents": {
+    "defaults": {
+      "sandbox": {
+        "mode": "off"
+      }
+    }
+  },
+  "tools": {
+    "profile": "minimal",
+    "allow": ["bash", "read", "write", "edit"],
+    "deny": ["*"],
+    "exec": {
+      "security": "allowlist",
+      "safeBins": ["python", "python3", "node", "npm", "powershell", "pwsh"],
+      "pathPrepend": ["D:\\bank\\scripts", "D:\\bank\\tools"],
+      "ask": "off"
+    },
+    "fs": {
+      "workspaceOnly": true
+    }
+  },
+  "gateway": {
+    "mode": "local",
+    "bind": "127.0.0.1",
+    "port": 18789,
+    "auth": {
+      "mode": "none"
+    }
+  },
+  "update": {
+    "checkOnStart": false,
+    "auto": {
+      "enabled": false
+    }
+  },
+  "logging": {
+    "level": "info"
+  },
+  "web": {
+    "search": {
+      "enabled": false
+    }
+  },
+  "browser": {
+    "enabled": false
+  },
+  "canvasHost": {
+    "enabled": false
+  },
+  "audio": {
+    "enabled": false
+  },
+  "media": {
+    "preserveFilenames": false
+  }
+}
