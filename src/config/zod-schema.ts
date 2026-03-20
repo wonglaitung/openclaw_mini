@@ -880,6 +880,14 @@ export const OpenClawSchema = z
           })
           .strict()
           .optional(),
+        audit: z
+          .object({
+            enabled: z.boolean().optional(),
+            file: z.string().optional(),
+            level: z.enum(["none", "basic", "detailed", "verbose"]).optional(),
+          })
+          .strict()
+          .optional(),
       })
       .strict()
       .superRefine((gateway, ctx) => {
