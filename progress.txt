@@ -351,6 +351,125 @@
 - 提交：commit e0ec972e9
 - 日期：2026-03-20
 
+## 2026-03-22 - 文件系统访问控制功能实现
+- 需求：控制 AGENT 只能在某些指定目录下读取/写入文件
+- 方案选择：方案 2 - 扩展 workspaceOnly 支持多个目录
+  - 添加 `allowedDirectories: string[]` 配置选项
+  - 支持绝对路径和相对路径（相对于工作区根目录）
+  - 当配置时优先于 `workspaceOnly`
+- 核心实现：
+  1. `src/agents/tool-fs-policy.ts`：
+     - 扩展 `ToolFsPolicy` 类型，添加 `allowedDirectories?: string[]`
+     - 添加 `isPathInAllowedDirectories()` 函数验证路径
+     - 添加 `resolveEffectiveAllowedDirectories()` 函数解析路径
+  2. `src/config/types.tools.ts`：
+     - 扩展 `FsToolsConfig` 类型，添加 `allowedDirectories` 字段
+  3. `src/config/zod-schema.agent-runtime.ts`：
+     - 更新 `ToolFsSchema` Zod 验证规则
+  4. `src/agents/pi-tools.read.ts`：
+     - 修改 `createHostWriteOperations()` 支持 `allowedDirectories`
+     - 修改 `createHostEditOperations()` 支持 `allowedDirectories`
+  5. `src/agents/apply-patch.ts`：
+     - 更新 `ApplyPatchOptions` 类型
+     - 修改 `resolvePatchPath()` 检查 `allowedDirectories`
+  6. `src/agents/pi-tools.ts`：
+     - 更新工具创建，传递 `allowedDirectories` 配置
+- 路径处理特性：
+  - ✅ 自动规范化（移除尾随斜杠、解析 `.` 和 `..`）
+  - ✅ 支持绝对路径和相对路径
+  - ✅ 子目录自动允许
+  - ✅ 防止部分目录名匹配
+  - ✅ 跨平台兼容（Windows/Linux/macOS）
+- 测试实现：
+  - 创建 `src/agents/tool-fs-policy.allowed-directories.test.ts`
+  - 18 个测试用例覆盖所有场景
+  - 所有测试通过
+- 配置示例：
+  - 创建 `configs/multi-dir-access.json` 配置示例
+- 文档更新：
+  - `docs/gateway/security/index.md` - 添加 `allowedDirectories` 说明
+  - `docs/gateway/configuration-examples.md` - 添加配置示例和详细说明
+- 构建和部署：
+  - 所有 lint、format、tsgo 检查通过
+  - 构建成功
+  - 提交：commit a1812bc59
+- 使用示例：
+  ```json
+  {
+    "tools": {
+      "fs": {
+        "workspaceOnly": false,
+        "allowedDirectories": [
+          "/data/project-a",
+          "/data/project-b/src",
+          "./relative-to-workspace"
+        ]
+      }
+    }
+  }
+  ```
+
+## 2026-03-22 - File System 标签页 UI 实现
+- 需求：在 Agents 页面的 Cron Jobs 标签后添加 File System 标签，显示文件系统配置
+- 方案设计：参考 `menuVisibility` 成功经验，配置驱动，易于调整
+- 核心实现：
+  1. 后端 API（`src/gateway/server-methods/channels.ts`）：
+     - 在 `channels.status` API 中添加 `fsConfig` 字段
+     - 返回 `workspaceOnly` 和 `allowedDirectories` 配置
+  2. UI 类型（`ui/src/ui/types.ts`）：
+     - 扩展 `ChannelsStatusSnapshot` 类型
+     - 添加 `menuVisibility` 和 `fsConfig` 字段
+  3. UI 状态（`ui/src/ui/app.ts` 和 `ui/src/ui/app-view-state.ts`）：
+     - 更新 `agentsPanel` 类型，添加 `"filesystem"` 选项
+  4. UI 渲染（`ui/src/ui/app-render.ts`）：
+     - 为 `onSelectPanel` 添加类型注解
+  5. UI 组件（`ui/src/ui/views/agents.ts`）：
+     - 添加 `"filesystem"` 到 `AgentsPanel` 类型
+     - 添加 `renderAgentFilesystem()` 函数
+     - 在标签页列表中添加 "File System" 标签
+     - 添加 filesystem 面板渲染逻辑
+- UI 展示内容：
+  - 显示 `workspaceOnly` 状态（Yes/No）
+  - 显示 `allowedDirectories` 列表
+  - 当没有配置时显示提示信息
+  - 样式与其他面板保持一致
+- 构建和部署：
+  - 修改后端代码：`pnpm build`
+  - 修改 UI 代码：`pnpm ui:build`
+  - 所有检查通过（lint、format、tsgo）
+  - 提交：commit 965e8fdab
+- 功能特性：
+  - ✅ 配置驱动，易于调整
+  - ✅ 遵循现有 Cron Jobs 标签模式
+  - ✅ 向后兼容
+  - ✅ 跨平台支持
+
+## 2026-03-22 - Windows 路径配置说明
+- 用户询问：Windows 下的路径怎么配
+- 提供了详细的 Windows 路径配置说明：
+  - 支持绝对路径：`C:/Users/username/projects`
+  - 支持相对路径：`./project-a`
+  - 推荐使用正斜杠 `/`（代码层面支持）
+  - Windows 命令行不支持正斜杠（使用反斜杠 `\`）
+  - JSON 配置文件中使用正斜杠 `/` 是可以的
+- 示例配置：
+  ```json
+  {
+    "allowedDirectories": [
+      "C:/Users/User/Downloads",
+      "C:/Users/User/projects/my-app"
+    ]
+  }
+  ```
+
+## 2026-03-22 - 文档更新
+- 在 `docs/gateway/configuration-examples.md` 中添加详细的 `allowedDirectories` 说明：
+  - 支持的路径格式（绝对路径、相对路径、跨平台）
+  - 行为说明（优先级、路径自动规范化、子目录匹配、防止部分匹配）
+  - Windows 路径示例
+  - 使用场景（多项目访问控制、安全加固、共享环境限制）
+- 提示：配置文件（.json）不支持注释，文档说明应在独立文档中
+
 ## 2026-03-20 - 审计日志功能实现
 - 需求背景：银行需要完整的操作审计轨迹，代理自主操作需要详细记录
 - 实现方案：混合方案（主日志 + 独立审计日志 + 配置控制）

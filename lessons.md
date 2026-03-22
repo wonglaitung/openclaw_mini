@@ -885,7 +885,7 @@ if (!fs.existsSync(indexJsPath)) {
   - chroot 环境
   - 文件系统权限控制
 
-### UI 菜单可见性控制实现（2026-03-20）
+### UI 菜单可见性控制实现经验（2026-03-20）
 
 **1. 配置驱动的 UI 控制**
 
@@ -1648,191 +1648,697 @@ pnpm build       # 构建检查
 3. 对象序列化要使用 JSON.stringify 而非 String()
 4. 按模块职责分离导入，避免不必要的依赖
 5. 在提交前运行完整的构建和检查流程
-   });
-   log.info(
-   `gateway: audit logging enabled (file=${auditConfig.file || "audit.log"}, level=${auditConfig.level || "detailed"})`,
-   );
-   }
 
-````
+### 文件系统访问控制实现经验（2026-03-22）
 
-**C. 日志文件位置**
+**1. 需求分析**
 
-- 默认：`~/.openclaw/audit.log`
-- 可配置：通过 `gateway.audit.file` 修改
-- 状态目录：`process.env.OPENCLAW_STATE_DIR` 或 `~/.openclaw`
+**用户需求**：控制 AGENT 只能在某些指定目录下读取/写入文件
+**明确需求**：不仅限制运行目录，还要限制**读取**操作到特定目录列表
+**场景**：多项目环境、银行内网、共享服务器
 
-**7. 实施验证**
+**2. 方案选择**
 
-**A. 代码质量检查**
+**方案对比**：
 
-```bash
-pnpm lint        # Lint 检查
-pnpm build       # 构建检查
-````
+| 方案  | 描述                          | 优点             | 缺点               | 推荐度     |
+| ----- | ----------------------------- | ---------------- | ------------------ | ---------- |
+| 方案1 | 使用现有 workspaceOnly        | 无需修改代码     | 仅支持单个工作区根 | ⭐⭐⭐     |
+| 方案2 | 扩展支持 allowedDirectories[] | 灵活、支持多目录 | 需要修改代码       | ⭐⭐⭐⭐⭐ |
+| 方案3 | 配置文件白名单                | 易于配置         | 需要额外解析逻辑   | ⭐⭐⭐⭐   |
+| 方案4 | 沙箱挂载路径                  | 安全隔离         | 部署复杂度高       | ⭐⭐       |
+| 方案5 | 工具级别路径限制              | 细粒度控制       | 代码侵入性强       | ⭐⭐       |
 
-**B. 功能测试**
+**选择方案 2 的原因**：
 
-1. **配置验证**：
-   - 启用审计日志：`gateway.audit.enabled = true`
-   - 设置详细级别：`gateway.audit.level = "detailed"`
-   - 重启 gateway
+- 灵活性高，支持多个指定目录
+- 向后兼容，workspaceOnly 仍可用
+- 易于理解和配置
+- 代码改动最小化
 
-2. **日志文件检查**：
+**3. 核心实现**
 
-   ```bash
-   # 检查日志文件是否存在
-   ls -lh ~/.openclaw/audit.log
+**A. 类型定义扩展**
 
-   # 查看日志内容
-   cat ~/.openclaw/audit.log | head -20
-   ```
+```typescript
+// src/agents/tool-fs-policy.ts
+export type ToolFsPolicy = {
+  workspaceOnly: boolean;
+  allowedDirectories?: string[];
+};
+```
 
-3. **格式验证**：
+**B. 路径验证函数**
 
-   ```bash
-   # 检查 JSON 格式是否正确
-   cat ~/.openclaw/audit.log | jq .
+```typescript
+export function isPathInAllowedDirectories(
+  targetPath: string,
+  allowedDirectories: string[],
+): boolean {
+  const path = require("path") as typeof import("path");
+  const normalizedTarget = path.normalize(path.resolve(targetPath));
 
-   # 查看特定工具调用
-   cat ~/.openclaw/audit.log | jq 'select(.toolName == "read")'
-   ```
+  return allowedDirectories.some((allowedDir) => {
+    // 移除尾随斜杠
+    const normalizedAllowed = path.normalize(path.resolve(allowedDir)).replace(/[/\\]+$/, "");
+    // 检查目标路径是否等于允许目录或是其子目录
+    return (
+      normalizedTarget === normalizedAllowed ||
+      normalizedTarget.startsWith(normalizedAllowed + path.sep)
+    );
+  });
+}
+```
 
-**C. 性能测试**
+**关键特性**：
 
-- 工具调用延迟：增加审计日志后延迟 < 1ms
-- 内存占用：审计日志流占用 < 1MB
-- 磁盘写入：每次写入 < 1KB
+- ✅ 自动规范化路径（移除尾随斜杠、解析 `.` 和 `..`）
+- ✅ 支持绝对路径和相对路径
+- ✅ 子目录自动允许
+- ✅ 防止部分目录名匹配（`/data/project` ≠ `/data/project-a`）
 
-**8. 遇到的问题和解决**
+**C. 配置集成**
+
+```typescript
+// src/config/types.tools.ts
+export type FsToolsConfig = {
+  workspaceOnly?: boolean;
+  allowedDirectories?: string[];
+};
+
+// src/config/zod-schema.agent-runtime.ts
+const ToolFsSchema = z
+  .object({
+    workspaceOnly: z.boolean().optional(),
+    allowedDirectories: z.array(z.string()).optional(),
+  })
+  .strict()
+  .optional();
+```
+
+**D. 工具集成**
+
+修改位置：
+
+- `src/agents/pi-tools.read.ts` - read/write/edit 操作
+- `src/agents/apply-patch.ts` - patch 应用
+- `src/agents/pi-tools.ts` - 工具创建
+
+优先级逻辑：
+
+```typescript
+if (allowedDirectories && allowedDirectories.length > 0) {
+  // 使用 allowedDirectories 验证
+} else if (workspaceOnly) {
+  // 使用 workspaceOnly 验证
+} else {
+  // 无限制
+}
+```
+
+**4. 路径处理特性**
+
+**A. 绝对路径支持**
+
+```json
+{
+  "allowedDirectories": ["/data/project-a", "/home/user/shared-docs"]
+}
+```
+
+**B. 相对路径支持**
+
+```json
+{
+  "allowedDirectories": ["./project-a", "../shared/project-b"]
+}
+```
+
+- 相对路径相对于工作区根目录解析
+- 在运行时自动转换为绝对路径
+
+**C. Windows 路径支持**
+
+```json
+{
+  "allowedDirectories": [
+    "C:/Users/username/projects/project-a",
+    "C:\\Users\\username\\projects\\project-b"
+  ]
+}
+```
+
+**路径格式说明**：
+
+- ✅ 推荐：正斜杠 `/`（跨平台兼容）
+- ✅ 可选：反斜杠 `\`（需要 JSON 转义：`\\`）
+- ⚠️ 注意：Windows 命令行不支持正斜杠，但 JSON 配置文件支持
+- ✅ 自动处理：Node.js 在 Windows 上自动转换正斜杠
+
+**D. 路径规范化**
+
+处理场景：
+
+```
+"/data/project/"     → "/data/project"
+"C:/Users/project"    → "C:\Users\project" (Windows)
+"./project/../a"     → "/workspace/a"
+"/data/./project"     → "/data/project"
+```
+
+**5. 测试实现**
+
+**测试文件**：`src/agents/tool-fs-policy.allowed-directories.test.ts`
+
+**测试覆盖**（18个测试用例）：
+
+1. ✅ 精确匹配允许目录
+2. ✅ 子目录匹配
+3. ✅ 非匹配路径
+4. ✅ 尾随斜杠处理
+5. ✅ 相对路径解析
+6. ✅ 空列表处理
+7. ✅ 路径规范化
+8. ✅ 防止部分目录名匹配
+9. ✅ 配置解析（全局 vs 代理特定）
+   10-18. ✅ 其他边界情况
+
+**测试发现的问题**：
+
+**问题 1**：尾随斜杠不处理
+
+- 原因：`path.normalize()` 不移除尾随斜杠
+- 解决：添加 `.replace(/[/\\]+$/, "")` 移除尾随斜杠
+
+**问题 2**：相对路径不解析
+
+- 原因：只解析了 targetPath，未解析 allowedDirectories
+- 解决：在比较时也解析 allowedDirectories
+
+**6. 文档更新**
+
+**A. 安全文档**
+
+`docs/gateway/security/index.md`：
+
+- 在 "Additional hardening options" 部分添加 `allowedDirectories` 说明
+
+**B. 配置示例文档**
+
+`docs/gateway/configuration-examples.md`：
+
+- 添加详细的 `allowedDirectories` 使用说明
+- 包括支持的路径格式、行为说明、Windows 示例、使用场景
+
+**C. 配置示例文件**
+
+`configs/multi-dir-access.json`：
+
+- 提供完整的配置示例
+- 展示绝对路径和相对路径的混合使用
+
+**7. 配置说明最佳实践**
+
+**JSON 配置文件不支持注释**：
+
+❌ 错误（会导致 JSON 解析失败）：
+
+```json
+{
+  "allowedDirectories": [
+    // 这是一个注释 - JSON 不支持
+    "C:/Users/username/projects"
+  ]
+}
+```
+
+✅ 正确：
+
+```json
+{
+  "allowedDirectories": ["C:/Users/username/projects"]
+}
+```
+
+**说明位置**：
+
+- 配置说明应放在文档中（`docs/gateway/configuration-examples.md`）
+- 不要在 JSON 配置文件中添加注释
+
+**8. Windows 路径配置详解**
+
+**命令行 vs JSON 配置**：
+
+| 场景           | 推荐格式                                                  | 说明            |
+| -------------- | --------------------------------------------------------- | --------------- |
+| Windows 命令行 | `C:\Users\User\Downloads`                                 | 必须 use 反斜杠 |
+| JSON 配置文件  | `C:/Users/User/Downloads` 或 `C:\\Users\\User\\Downloads` | 推荐正斜杠      |
+| 代码中         | `C:/Users/User/Downloads`                                 | 推荐正斜杠      |
+
+**关键区别**：
+
+- Windows 命令行：`cd /Downloads` ❌（不支持正斜杠）
+- JSON 配置：`"C:/Users/User/Downloads"` ✅（Node.js 支持）
+- 代码中：`path.resolve("C:/Users/User/Downloads")` ✅（Node.js 支持）
+
+**推荐实践**：
+
+- 在 JSON 配置文件中使用正斜杠 `/`（更简洁）
+- 反斜杠需要转义为 `\\`（易出错）
+- Node.js 在 Windows 上自动处理正斜杠
+
+**9. 遇到的问题和解决**
 
 **A. TypeScript 类型错误**
 
-- **问题**：`auditToolResult` 未导入
-- **原因**：import 语句中缺少该函数
-- **解决**：添加导入并移除未使用的 `AuditConfig` 类型
+- 问题：未导入 `setAuditConfig` 导致类型错误
+- 解决：移除未使用的导入，只导入需要的函数
 
-**B. 配置验证失败**
+**B. Lint 错误 - 正则表达式转义**
 
-- **问题**：配置文件中 `audit` 字段未识别
-- **原因**：Zod schema 中缺少 `audit` 字段定义
-- **解决**：在 `zod-schema.ts` 中添加审计配置验证
+- 问题：`[\/\\]` 中的 `\/` 被警告
+- 解决：改为 `[/\\]` 或仅使用 `/`
 
-**C. 日志文件权限问题**
+**C. Lint 错误 - 未使用的变量**
 
-- **问题**：写入日志文件时权限被拒绝
-- **原因**：日志目录不存在或无写入权限
-- **解决**：在初始化时检查并创建目录
+- 问题：`projectAAbsolute` 和 `projectBAbsolute` 声明但未使用
+- 解决：移除未使用的变量声明
 
-**D. 构建失败**
+**D. 格式问题**
 
-- **问题**：TypeScript 编译错误
-- **原因**：导入类型错误
-- **解决**：修复 import 语句，确保所有类型正确导入
+- 问题：新文件和修改有格式不一致
+- 解决：运行 `pnpm format:fix` 自动修复
 
-**9. 经验教训**
+**10. 经验教训**
 
-**A. 模块化设计的重要性**
+**A. 路径处理的复杂性**
 
-- 审计日志模块独立于主日志系统
-- 单一职责：只负责审计日志，不涉及其他日志
-- 便于测试和维护
+- ✅ 使用 `path.resolve()` 和 `path.normalize()` 确保跨平台兼容
+- ✅ 移除尾随斜杠以避免比较问题
+- ✅ 同时解析目标路径和允许目录路径
+- ✅ 防止部分目录名匹配（使用 `startsWith(normalized + path.sep)`）
 
-**B. 配置驱动的设计**
+**B. 向后兼容性的重要性**
 
-- 通过配置文件控制审计日志行为
-- 支持不同环境的审计级别
-- 便于动态调整，无需修改代码
+- ✅ 保留 `workspaceOnly` 配置，默认行为不变
+- ✅ 当同时配置时，`allowedDirectories` 优先
+- ✅ 未配置时保持无限制行为
 
-**C. 结构化日志的优势**
+**C. 测试驱动开发的价值**
 
-- JSON 格式易于解析和分析
-- 每个字段都有明确的语义
-- 支持日志查询和可视化
+- ✅ 18个测试用例覆盖所有场景
+- ✅ 测试发现并修复了两个边界情况
+- ✅ 测试确保代码质量和稳定性
 
-**D. 性能优化策略**
+**D. 文档的重要性**
 
-- 异步写入避免阻塞
-- 流式写入减少内存占用
-- 错误处理不影响主流程
+- ✅ 详细的使用说明降低用户学习成本
+- ✅ Windows 路径配置的详细说明避免混淆
+- ✅ 配置示例提供实际参考
 
-**E. 类型安全的重要性**
+**E. JSON 配置文件的限制**
 
-- TypeScript 类型定义确保配置正确
-- Zod schema 运行时验证配置
-- 双重保障减少运行时错误
-
-**10. 最佳实践**
-
-**A. 审计日志内容**
-
-- ✅ 记录所有工具调用（工具名称、参数、时间戳）
-- ✅ 记录工具执行结果（成功/失败、耗时）
-- ✅ 记录安全策略阻止（工具被阻止原因）
-- ✅ 记录会话信息（sessionId、sessionKey、runId）
-- ❌ 不要记录敏感信息（密码、密钥、个人信息）
-
-**B. 日志文件管理**
-
-- 定期轮转日志文件，避免单个文件过大
-- 设置合理的保留策略（如保留30天）
-- 压缩旧日志文件节省磁盘空间
-
-**C. 配置建议**
-
-- 生产环境：使用 `detailed` 级别
-- 开发环境：使用 `basic` 级别
-- 调试环境：使用 `verbose` 级别
-- 测试环境：使用 `none` 级别
-
-**D. 监控和告警**
-
-- 监控审计日志文件的写入状态
-- 设置磁盘空间告警
-- 定期验证审计日志完整性
+- ✅ JSON 标准不支持注释
+- ✅ 配置说明应放在文档中
+- ✅ 使用示例文件展示完整配置
 
 **11. 后续优化建议**
 
-**A. 日志查询工具**
+**A. 路径验证增强**
 
-- 提供 CLI 工具查询审计日志
-- 支持按时间、用户、工具筛选
-- 支持统计分析和报表生成
+- 支持通配符模式（如 `/data/project-*`）
+- 支持排除路径（如 `/data/project-a` 但排除 `/data/project-a/.git`）
+- 支持路径别名配置
 
-**B. 实时监控**
+**B. 配置验证增强**
 
-- 提供实时审计日志查看功能
-- 支持订阅和通知
-- 集成到监控系统
+- 启动时验证所有 allowedDirectories 是否存在
+- 提供配置检查工具
+- 实时监控路径变更
 
-**C. 日志加密**
+**C. 审计日志集成**
 
-- 支持审计日志加密存储
-- 支持签名和验证
-- 确保日志不被篡改
+- 记录路径访问尝试（包括被拒绝的访问）
+- 记录允许/拒绝的决策原因
+- 提供访问审计报告
 
-**D. 多实例支持**
+**D. UI 增强**
 
-- 支持多个审计日志文件
-- 支持按模块/用户分离日志
-- 支持分布式日志收集
+- 在 Agents 页面显示路径访问权限
+- 提供路径验证工具
+- 显示最近的路径访问历史
 
 **12. 总结**
 
-审计日志功能成功实现，完全满足银行审计需求：
+文件系统访问控制功能成功实现：
 
-- ✅ 独立审计日志文件
-- ✅ 结构化 JSON 格式
-- ✅ 多级审计控制
-- ✅ 完整的操作轨迹
-- ✅ 不影响现有系统
-- ✅ 配置灵活可控
-- ✅ 性能影响最小
+- ✅ 支持多目录访问控制
+- ✅ 向后兼容 workspaceOnly
+- ✅ 跨平台路径支持
+- ✅ 自动路径规范化
+- ✅ 防止部分目录名匹配
+- ✅ 完整的测试覆盖
+- ✅ 详细的文档说明
+- ✅ 所有检查通过
 
 关键成功因素：
 
-1. 模块化设计，职责单一
-2. 配置驱动，灵活可调
-3. 结构化日志，易于分析
-4. 类型安全，双重保障
-5. 异步写入，性能优化
+1. 清晰的需求分析
+2. 合理的方案选择
+3. 健壮的路径处理逻辑
+4. 完整的测试覆盖
+5. 详细的文档说明
+6. 向后兼容性保持
+
+**GitHub 提交**：
+
+- commit a1812bc59: feat: add allowedDirectories option for multi-directory filesystem access control
+
+### File System 标签页 UI 实现经验（2026-03-22）
+
+**1. 需求背景**
+
+- 用户要求：在 Agents 页面的 Cron Jobs 标签后添加 File System 标签
+- 显示内容：`workspaceOnly` 和 `allowedDirectories` 配置
+- 参考：lessons.md 中 `menuVisibility` 的成功经验
+
+**2. 方案设计**
+
+**参考 lessons.md 的经验**：
+
+- ✅ 配置驱动的设计
+- ✅ 后端 API 扩展（channels.status）
+- ✅ UI 类型定义更新
+- ✅ 前端组件添加
+- ✅ 遵循现有模式（Cron Jobs 标签）
+
+**实施步骤**：
+
+1. 修改后端 API，在 `channels.status` 中添加 `fsConfig`
+2. 更新 UI 类型定义（`ChannelsStatusSnapshot`）
+3. 更新 UI 状态类型（`agentsPanel`）
+4. 创建 `renderAgentFilesystem()` 函数
+5. 在标签页列表中添加 "File System" 标签
+6. 添加 filesystem 面板渲染逻辑
+
+**3. 后端 API 实现**
+
+**文件**：`src/gateway/server-methods/channels.ts`
+
+**修改内容**：
+
+```typescript
+const fsConfig = cfg.tools?.fs ?? {};
+const payload: Record<string, unknown> = {
+  ts: Date.now(),
+  // ... 其他字段
+  menuVisibility,
+  fsConfig,
+  // ... 其他字段
+};
+```
+
+**返回内容**：
+
+```typescript
+fsConfig?: {
+  workspaceOnly?: boolean;
+  allowedDirectories?: string[];
+}
+```
+
+**4. UI 类型定义更新**
+
+**文件**：`ui/src/ui/types.ts`
+
+**修改内容**：
+
+```typescript
+export type ChannelsStatusSnapshot = {
+  ts: number;
+  channelOrder: string[];
+  channelLabels: Record<string, string>;
+  channelDetailLabels?: Record<string, string>;
+  channelSystemImages?: Record<string, string>;
+  channelMeta?: ChannelUiMetaEntry[];
+  menuVisibility?: Record<string, boolean | undefined>;
+  fsConfig?: {
+    workspaceOnly?: boolean;
+    allowedDirectories?: string[];
+  };
+  channels: Record<string, unknown>;
+  channelAccounts: Record<string, ChannelAccountSnapshot[]>;
+  channelDefaultAccountId: Record<string, string>;
+};
+```
+
+**5. UI 状态类型更新**
+
+**文件**：`ui/src/ui/app.ts` 和 `ui/src/ui/app-view-state.ts`
+
+**修改内容**：
+
+```typescript
+// app.ts
+@state() agentsPanel: "overview" | "files" | "tools" | "skills" | "channels" | "cron" | "filesystem" =
+  "overview";
+
+// app-view-state.ts
+export type AppViewState = {
+  // ... 其他字段
+  agentsPanel: "overview" | "files" | "tools" | "skills" | "channels" | "cron" | "filesystem";
+  // ... 其他字段
+};
+```
+
+**6. UI 组件实现**
+
+**文件**：`ui/src/ui/views/agents.ts`
+
+**修改内容**：
+
+1. 添加面板类型：
+
+```typescript
+export type AgentsPanel =
+  | "overview"
+  | "files"
+  | "tools"
+  | "skills"
+  | "channels"
+  | "cron"
+  | "filesystem";
+```
+
+2. 添加渲染函数：
+
+```typescript
+function renderAgentFilesystem(props: {
+  fsConfig?: {
+    workspaceOnly?: boolean;
+    allowedDirectories?: string[];
+  };
+}) {
+  const { fsConfig } = props;
+  const workspaceOnly = fsConfig?.workspaceOnly ?? false;
+  const allowedDirectories = fsConfig?.allowedDirectories ?? [];
+
+  return html`
+    <div class="card">
+      <div class="card-title">File System Configuration</div>
+      <div class="card-sub">Current filesystem access control settings</div>
+      <div style="margin-top: 16px;">
+        <div class="agent-kv" style="margin-bottom: 16px;">
+          <div class="label">Workspace Only</div>
+          <div>${workspaceOnly ? "Yes" : "No"}</div>
+        </div>
+        ${allowedDirectories.length > 0
+          ? html`
+              <div class="agent-kv">
+                <div class="label">Allowed Directories</div>
+                <div class="mono" style="white-space: pre-wrap;">
+                  ${allowedDirectories.join("\n") || "None"}
+                </div>
+              </div>
+            `
+          : html`
+              <div class="callout info" style="margin-top: 8px;">
+                No allowed directories configured. Filesystem access is unrestricted.
+              </div>
+            `}
+      </div>
+    </div>
+  `;
+}
+```
+
+3. 更新标签页列表：
+
+```typescript
+const tabs: Array<{ id: AgentsPanel; label: string }> = [
+  { id: "overview", label: "Overview" },
+  { id: "files", label: "Files" },
+  { id: "tools", label: "Tools" },
+  { id: "skills", label: "Skills" },
+  { id: "channels", label: "Channels" },
+  { id: "cron", label: "Cron Jobs" },
+  { id: "filesystem", label: "File System" },
+];
+```
+
+4. 添加面板渲染逻辑：
+
+```typescript
+${
+  props.activePanel === "filesystem"
+    ? renderAgentFilesystem({
+        fsConfig: props.channels.snapshot?.fsConfig,
+      })
+    : nothing
+}
+```
+
+**7. UI 渲染类型注解**
+
+**文件**：`ui/src/ui/app-render.ts`
+
+**修改内容**：
+
+```typescript
+onSelectPanel: (panel: "overview" | "files" | "tools" | "skills" | "channels" | "cron" | "filesystem") => {
+  state.agentsPanel = panel;
+  // ... 其他逻辑
+},
+```
+
+**原因**：TypeScript 严格模式下需要明确的类型注解
+
+**8. 构建和部署**
+
+**构建流程**：
+
+1. 修改后端代码（`.ts` 文件）：
+
+   ```bash
+   pnpm build
+   ```
+
+2. 修改 UI 代码（`.tsx` 或 `.ts` 文件）：
+
+   ```bash
+   pnpm ui:build
+   ```
+
+3. 修改配置文件（`.json` 文件）：
+   ```bash
+   # 只需重启 gateway，无需构建
+   ```
+
+**验证结果**：
+
+- ✅ 所有 lint、format、tsgo 检查通过
+- ✅ 后端构建成功
+- ✅ UI 构建成功
+- ✅ 类型检查通过
+
+**9. 遇到的问题和解决**
+
+**A. TypeScript 类型错误**
+
+**问题**：
+
+```
+Type 'AgentsPanel' is not assignable to type '"channels" | "cron" | "files" | "overview" | "skills" | "tools"'.
+Type '"filesystem"' is not assignable to type '"channels" | "cron" | "files" | "overview" | "skills" | "tools"'.
+```
+
+**原因**：`app.ts` 和 `app-view-state.ts` 中的 `agentsPanel` 类型没有同步更新
+
+**解决**：在两个文件中都添加 `"filesystem"` 选项
+
+**B. 类型注解缺失**
+
+**问题**：`app-render.ts` 中的 `onSelectPanel` 参数没有类型注解
+
+**解决**：添加明确的类型注解：
+
+```typescript
+onSelectPanel: (panel: "overview" | "files" | "tools" | "skills" | "channels" | "cron" | "filesystem") => {
+```
+
+**10. 经验教训**
+
+**A. 类型一致性的重要性**
+
+- ✅ 同步更新所有相关的类型定义
+- ✅ `app.ts` 和 `app-view-state.ts` 必须保持一致
+- ✅ 使用明确的类型注解避免 TypeScript 错误
+
+**B. 配置驱动的设计优势**
+
+- ✅ 通过配置文件控制 UI 显示
+- ✅ 易于调整，无需重新编译
+- ✅ 适用于不同部署场景
+
+**C. 遵循现有模式的重要性**
+
+- ✅ 参考 `menuVisibility` 的成功经验
+- ✅ 遵循 Cron Jobs 标签的实现模式
+- ✅ 保持 UI 风格一致
+
+**D. 构建流程的理解**
+
+- 修改后端代码 → `pnpm build`
+- 修改 UI 代码 → `pnpm ui:build`
+- 修改配置文件 → 重启 gateway
+
+**E. 用户体验的考虑**
+
+- ✅ 当没有配置时显示提示信息
+- ✅ 样式与其他面板保持一致
+- ✅ 使用 mono 字体显示路径列表
+
+**11. 后续优化建议**
+
+**A. 功能增强**
+
+- 添加路径验证工具（检查路径是否存在）
+- 显示路径权限状态（可读/可写）
+- 显示最近的文件系统访问历史
+- 添加配置编辑功能（直接在 UI 中修改）
+
+**B. 可视化增强**
+
+- 使用树形结构显示目录层级
+- 高亮显示当前工作目录
+- 显示路径的存储空间使用情况
+- 添加路径访问权限指示器
+
+**C. 监控和告警**
+
+- 监控文件系统访问异常
+- 设置路径访问频率告警
+- 记录被拒绝的访问尝试
+
+**12. 总结**
+
+File System 标签页功能成功实现：
+
+- ✅ 新增 File System 标签页
+- ✅ 显示文件系统访问控制配置
+- ✅ 支持 workspaceOnly 和 allowedDirectories
+- ✅ 遵循现有 UI 模式
+- ✅ 类型安全
+- ✅ 所有检查通过
+
+关键成功因素：
+
+1. 参考成功经验（menuVisibility）
+2. 配置驱动的设计
+3. 类型一致性的维护
+4. 遵循现有模式
+5. 完整的构建流程理解
+
+**GitHub 提交**：
+
+- commit 965e8fdab: feat: add File System tab in Agents UI
