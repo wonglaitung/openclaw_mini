@@ -278,8 +278,21 @@ export type FsToolsConfig = {
   /**
    * Restrict filesystem tools (read/write/edit/apply_patch) to the agent workspace directory.
    * Default: false (unrestricted, matches legacy behavior).
+   * Note: If allowedDirectories is specified, workspaceOnly is ignored.
    */
   workspaceOnly?: boolean;
+  /**
+   * List of directories that filesystem tools are allowed to access.
+   * Paths can be absolute or relative to the workspace root.
+   * If specified, this overrides workspaceOnly setting.
+   * Default: undefined (uses workspaceOnly or unrestricted access).
+   *
+   * @example
+   * ["/data/project-a", "/data/project-b/src"]  // Absolute paths
+   * @example
+   * ["./allowed-dir-1", "../shared-docs"]  // Relative to workspace root
+   */
+  allowedDirectories?: string[];
 };
 
 export type AgentToolsConfig = {

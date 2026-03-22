@@ -73,6 +73,8 @@ type ApplyPatchOptions = {
   sandbox?: SandboxApplyPatchConfig;
   /** Restrict patch paths to the workspace root (cwd). Default: true. Set false to opt out. */
   workspaceOnly?: boolean;
+  /** List of allowed directories (absolute paths). If specified, overrides workspaceOnly. */
+  allowedDirectories?: string[];
   signal?: AbortSignal;
 };
 
@@ -83,11 +85,17 @@ const applyPatchSchema = Type.Object({
 });
 
 export function createApplyPatchTool(
-  options: { cwd?: string; sandbox?: SandboxApplyPatchConfig; workspaceOnly?: boolean } = {},
+  options: {
+    cwd?: string;
+    sandbox?: SandboxApplyPatchConfig;
+    workspaceOnly?: boolean;
+    allowedDirectories?: string[];
+  } = {},
 ): AgentTool<typeof applyPatchSchema, ApplyPatchToolDetails> {
   const cwd = options.cwd ?? process.cwd();
   const sandbox = options.sandbox;
   const workspaceOnly = options.workspaceOnly !== false;
+  const allowedDirectories = options.allowedDirectories;
 
   return {
     name: "apply_patch",
@@ -111,6 +119,7 @@ export function createApplyPatchTool(
         cwd,
         sandbox,
         workspaceOnly,
+        allowedDirectories,
         signal,
       });
 
@@ -124,7 +133,7 @@ export function createApplyPatchTool(
 
 export async function applyPatch(
   input: string,
-  options: ApplyPatchOptions,
+  options: ApplyPatchOptions & { allowedDirectories?: string[] },
 ): Promise<ApplyPatchResult> {
   const parsed = parsePatchText(input);
   if (parsed.hunks.length === 0) {
@@ -305,7 +314,7 @@ async function ensureDir(filePath: string, ops: PatchFileOps) {
 
 async function resolvePatchPath(
   filePath: string,
-  options: ApplyPatchOptions,
+  options: ApplyPatchOptions & { allowedDirectories?: string[] },
   aliasPolicy: PathAliasPolicy = PATH_ALIAS_POLICIES.strict,
 ): Promise<{ resolved: string; display: string }> {
   if (options.sandbox) {
@@ -329,6 +338,32 @@ async function resolvePatchPath(
   }
 
   const workspaceOnly = options.workspaceOnly !== false;
+  const allowedDirectories = options.allowedDirectories;
+
+  // If allowedDirectories is specified, use it for validation
+  if (allowedDirectories && allowedDirectories.length > 0) {
+    const resolvedPath = resolvePathFromInput(filePath, options.cwd);
+    // Check if path is within any of the allowed directories
+    const isAllowed = allowedDirectories.some((allowedDir) => {
+      const normalizedAllowed = path.resolve(allowedDir);
+      const normalizedResolved = path.resolve(resolvedPath);
+      return (
+        normalizedResolved.startsWith(normalizedAllowed + path.sep) ||
+        normalizedResolved === normalizedAllowed
+      );
+    });
+
+    if (!isAllowed) {
+      throw new Error(`Path escapes allowed directories: ${filePath}`);
+    }
+
+    return {
+      resolved: resolvedPath,
+      display: toDisplayPath(resolvedPath, options.cwd),
+    };
+  }
+
+  // Fallback to workspaceOnly behavior
   const resolved = workspaceOnly
     ? (
         await assertSandboxPath({

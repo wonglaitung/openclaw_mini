@@ -308,6 +308,11 @@ Save to `~/.openclaw/openclaw.json` and you can DM the bot from that number.
   tools: {
     allow: ["exec", "process", "read", "write", "edit", "apply_patch"],
     deny: ["browser", "canvas"],
+    // Restrict filesystem tools to specific directories
+    fs: {
+      workspaceOnly: false,
+      allowedDirectories: ["/data/project-a", "/data/project-b/src", "./relative-to-workspace"],
+    },
     exec: {
       backgroundMs: 10000,
       timeoutSec: 1800,
@@ -635,3 +640,55 @@ terms before depending on subscription auth.
 - Provider IDs differ (phone numbers, user IDs, channel IDs). Use the provider docs to confirm the format.
 - Optional sections to add later: `web`, `browser`, `ui`, `discovery`, `canvasHost`, `talk`, `signal`, `imessage`.
 - See [Providers](/providers) and [Troubleshooting](/gateway/troubleshooting) for deeper setup notes.
+
+## Filesystem access control
+
+### Restrict to specific directories
+
+Use `tools.fs.allowedDirectories` to limit filesystem tool access to a specific list of directories:
+
+```json5
+{
+  tools: {
+    fs: {
+      workspaceOnly: false,
+      // List of allowed directories (absolute or relative paths)
+      allowedDirectories: [
+        "C:/Users/username/projects/project-a",
+        "D:/workspace/project-b/src",
+        "./relative-to-workspace",
+      ],
+    },
+  },
+}
+```
+
+**Path formats supported:**
+
+- **Absolute paths**: `"C:/Users/username/projects"` (Windows), `"/home/user/projects"` (Linux/macOS)
+- **Relative paths**: `"./project-a"`, `"../shared"` (resolved against workspace root)
+- **Cross-platform**: Use forward slashes `/` for better portability (works on all platforms)
+
+**Behavior:**
+
+- When `allowedDirectories` is specified, it takes precedence over `workspaceOnly`
+- Paths are normalized and resolved at runtime
+- Subdirectories of allowed directories are automatically permitted
+- Partial directory name matches are prevented (e.g., `/data/project` does not match `/data/project-a`)
+
+**Windows path examples:**
+
+```json5
+allowedDirectories: [
+  "C:/Users/User/Downloads",           // ✅ Recommended: forward slashes
+  "C:\\Users\\User\\projects\\my-app", // ✅ Also works: escaped backslashes
+  "D:/data/shared-docs",
+  "./relative-to-workspace"            // Relative to workspace root
+]
+```
+
+**Use cases:**
+
+- Multi-project access control (limit agent to specific project folders)
+- Security hardening (prevent access to sensitive directories)
+- Shared environments (restrict agent to designated work areas)
