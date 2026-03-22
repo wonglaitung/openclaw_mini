@@ -151,7 +151,16 @@
 
 - Vocabulary: "makeup" = "mac app".
 - Rebrand/migration issues or legacy config/service warnings: run `openclaw doctor` (see `docs/gateway/doctor.md`).
-- Offline Bank Deployment: Use `OPENCLAW_CONFIG_PATH=configs/offline-bank.json node openclaw.mjs gateway run --port 18789` to start gateway with offline-bank configuration.
+- **Bank Offline Deployment** (configs/offline-bank.json):
+  - **Build Scripts**: `scripts/build-offline.sh` (Bash), `scripts/build-offline.ps1` (PowerShell), `scripts/build-offline.py` (Python)
+  - **Environment**: `OPENCLAW_INCLUDE_OPTIONAL_BUNDLED=0`, `OPENCLAW_BUILD_PROFILE=offline`
+  - **Excluded**: 15 messaging channels + 10 optional plugins (76% size reduction: 152M → 36M)
+  - **Security**: Tool allowlist, safe binaries, workspace restrictions, path prepend
+  - **Audit Logging**: `gateway.audit.enabled: true` (JSON Lines format, detailed/basic/verbose levels)
+  - **PowerShell Fallback**: Auto-detect + fallback to cmd.exe with syntax translation (src/agents/shell-fallback.ts)
+  - **UI Customization**: Menu visibility control, custom branding, simplified login page
+  - **Startup**: `OPENCLAW_CONFIG_PATH=configs/offline-bank.json node openclaw.mjs gateway run --port 18789`
+  - **Documentation**: `scripts/README-OFFLINE.md`
 - Use `$openclaw-parallels-smoke` at `.agents/skills/openclaw-parallels-smoke/SKILL.md` for Parallels smoke, rerun, upgrade, debug, and result-interpretation workflows across macOS, Windows, and Linux guests.
 - For the macOS Discord roundtrip deep dive, use the narrower `.agents/skills/parallels-discord-roundtrip/SKILL.md` companion skill.
 - Never edit `node_modules` (global/Homebrew/npm/git installs too). Updates overwrite. Skill notes go in `tools.md` or `AGENTS.md`.
