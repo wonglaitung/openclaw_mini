@@ -18,7 +18,14 @@ import {
 import { renderAgentTools, renderAgentSkills } from "./agents-panels-tools-skills.ts";
 import { agentBadgeText, buildAgentContext, normalizeAgentLabel } from "./agents-utils.ts";
 
-export type AgentsPanel = "overview" | "files" | "tools" | "skills" | "channels" | "cron";
+export type AgentsPanel =
+  | "overview"
+  | "files"
+  | "tools"
+  | "skills"
+  | "channels"
+  | "cron"
+  | "filesystem";
 
 export type ConfigState = {
   form: Record<string, unknown> | null;
@@ -341,6 +348,13 @@ export function renderAgents(props: AgentsProps) {
                       })
                     : nothing
                 }
+                ${
+                  props.activePanel === "filesystem"
+                    ? renderAgentFilesystem({
+                        fsConfig: props.channels.snapshot?.fsConfig,
+                      })
+                    : nothing
+                }
               `
         }
       </section>
@@ -362,6 +376,7 @@ function renderAgentTabs(
     { id: "skills", label: "Skills" },
     { id: "channels", label: "Channels" },
     { id: "cron", label: "Cron Jobs" },
+    { id: "filesystem", label: "File System" },
   ];
   return html`
     <div class="agent-tabs">
@@ -376,6 +391,44 @@ function renderAgentTabs(
           </button>
         `,
       )}
+    </div>
+  `;
+}
+
+function renderAgentFilesystem(props: {
+  fsConfig?: {
+    workspaceOnly?: boolean;
+    allowedDirectories?: string[];
+  };
+}) {
+  const { fsConfig } = props;
+  const workspaceOnly = fsConfig?.workspaceOnly ?? false;
+  const allowedDirectories = fsConfig?.allowedDirectories ?? [];
+
+  return html`
+    <div class="card">
+      <div class="card-title">File System Configuration</div>
+      <div class="card-sub">Current filesystem access control settings</div>
+      <div style="margin-top: 16px;">
+        <div class="agent-kv" style="margin-bottom: 16px;">
+          <div class="label">Workspace Only</div>
+          <div>${workspaceOnly ? "Yes" : "No"}</div>
+        </div>
+        ${
+          allowedDirectories.length > 0
+            ? html`
+          <div class="agent-kv">
+            <div class="label">Allowed Directories</div>
+            <div class="mono" style="white-space: pre-wrap;">${allowedDirectories.join("\n") || "None"}</div>
+          </div>
+        `
+            : html`
+                <div class="callout info" style="margin-top: 8px">
+                  No allowed directories configured. Filesystem access is unrestricted.
+                </div>
+              `
+        }
+      </div>
     </div>
   `;
 }

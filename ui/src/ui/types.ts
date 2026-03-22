@@ -15,6 +15,11 @@ export type ChannelsStatusSnapshot = {
   channelDetailLabels?: Record<string, string>;
   channelSystemImages?: Record<string, string>;
   channelMeta?: ChannelUiMetaEntry[];
+  menuVisibility?: Record<string, boolean | undefined>;
+  fsConfig?: {
+    workspaceOnly?: boolean;
+    allowedDirectories?: string[];
+  };
   channels: Record<string, unknown>;
   channelAccounts: Record<string, ChannelAccountSnapshot[]>;
   channelDefaultAccountId: Record<string, string>;

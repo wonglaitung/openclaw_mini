@@ -1015,7 +1015,16 @@ export function renderApp(state: AppViewState) {
                       void loadAgentSkills(state, agentId);
                     }
                   },
-                  onSelectPanel: (panel) => {
+                  onSelectPanel: (
+                    panel:
+                      | "overview"
+                      | "files"
+                      | "tools"
+                      | "skills"
+                      | "channels"
+                      | "cron"
+                      | "filesystem",
+                  ) => {
                     state.agentsPanel = panel;
                     if (panel === "files" && resolvedAgentId) {
                       if (state.agentFilesList?.agentId !== resolvedAgentId) {
