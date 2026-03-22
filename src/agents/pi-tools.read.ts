@@ -25,6 +25,7 @@ import {
 import type { AnyAgentTool } from "./pi-tools.types.js";
 import { assertSandboxPath } from "./sandbox-paths.js";
 import type { SandboxFsBridge } from "./sandbox/fs-bridge.js";
+import { isPathInAllowedDirectories } from "./tool-fs-policy.js";
 import { sanitizeToolResultImages } from "./tool-images.js";
 
 export {
@@ -621,14 +622,20 @@ export function createSandboxedEditTool(params: SandboxToolParams) {
   return wrapToolParamNormalization(base, CLAUDE_PARAM_GROUPS.edit);
 }
 
-export function createHostWorkspaceWriteTool(root: string, options?: { workspaceOnly?: boolean }) {
+export function createHostWorkspaceWriteTool(
+  root: string,
+  options?: { workspaceOnly?: boolean; allowedDirectories?: string[] },
+) {
   const base = createWriteTool(root, {
     operations: createHostWriteOperations(root, options),
   }) as unknown as AnyAgentTool;
   return wrapToolParamNormalization(base, CLAUDE_PARAM_GROUPS.write);
 }
 
-export function createHostWorkspaceEditTool(root: string, options?: { workspaceOnly?: boolean }) {
+export function createHostWorkspaceEditTool(
+  root: string,
+  options?: { workspaceOnly?: boolean; allowedDirectories?: string[] },
+) {
   const base = createEditTool(root, {
     operations: createHostEditOperations(root, options),
   }) as unknown as AnyAgentTool;
@@ -718,8 +725,32 @@ async function writeHostFile(absolutePath: string, content: string) {
   await fs.writeFile(resolved, content, "utf-8");
 }
 
-function createHostWriteOperations(root: string, options?: { workspaceOnly?: boolean }) {
+function createHostWriteOperations(
+  root: string,
+  options?: { workspaceOnly?: boolean; allowedDirectories?: string[] },
+) {
   const workspaceOnly = options?.workspaceOnly ?? false;
+  const allowedDirectories = options?.allowedDirectories;
+
+  // 如果配置了 allowedDirectories，优先使用 allowedDirectories 验证
+  if (allowedDirectories && allowedDirectories.length > 0) {
+    return {
+      mkdir: async (dir: string) => {
+        const resolved = path.resolve(dir);
+        if (!isPathInAllowedDirectories(resolved, allowedDirectories)) {
+          throw createFsAccessError("EACCES", dir);
+        }
+        await fs.mkdir(resolved, { recursive: true });
+      },
+      writeFile: async (absolutePath: string, content: string) => {
+        const resolved = path.resolve(absolutePath);
+        if (!isPathInAllowedDirectories(resolved, allowedDirectories)) {
+          throw createFsAccessError("EACCES", absolutePath);
+        }
+        await writeHostFile(resolved, content);
+      },
+    } as const;
+  }
 
   if (!workspaceOnly) {
     // When workspaceOnly is false, allow writes anywhere on the host
@@ -752,8 +783,39 @@ function createHostWriteOperations(root: string, options?: { workspaceOnly?: boo
   } as const;
 }
 
-function createHostEditOperations(root: string, options?: { workspaceOnly?: boolean }) {
+function createHostEditOperations(
+  root: string,
+  options?: { workspaceOnly?: boolean; allowedDirectories?: string[] },
+) {
   const workspaceOnly = options?.workspaceOnly ?? false;
+  const allowedDirectories = options?.allowedDirectories;
+
+  // 如果配置了 allowedDirectories，优先使用 allowedDirectories 验证
+  if (allowedDirectories && allowedDirectories.length > 0) {
+    return {
+      readFile: async (absolutePath: string) => {
+        const resolved = path.resolve(absolutePath);
+        if (!isPathInAllowedDirectories(resolved, allowedDirectories)) {
+          throw createFsAccessError("EACCES", absolutePath);
+        }
+        return await fs.readFile(resolved);
+      },
+      writeFile: async (absolutePath: string, content: string) => {
+        const resolved = path.resolve(absolutePath);
+        if (!isPathInAllowedDirectories(resolved, allowedDirectories)) {
+          throw createFsAccessError("EACCES", absolutePath);
+        }
+        await writeHostFile(resolved, content);
+      },
+      access: async (absolutePath: string) => {
+        const resolved = path.resolve(absolutePath);
+        if (!isPathInAllowedDirectories(resolved, allowedDirectories)) {
+          throw createFsAccessError("EACCES", absolutePath);
+        }
+        await fs.access(resolved);
+      },
+    } as const;
+  }
 
   if (!workspaceOnly) {
     // When workspaceOnly is false, allow edits anywhere on the host

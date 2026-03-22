@@ -926,7 +926,8 @@ We may add a single `readOnlyMode` flag later to simplify this configuration.
 Additional hardening options:
 
 - `tools.exec.applyPatch.workspaceOnly: true` (default): ensures `apply_patch` cannot write/delete outside the workspace directory even when sandboxing is off. Set to `false` only if you intentionally want `apply_patch` to touch files outside the workspace.
-- `tools.fs.workspaceOnly: true` (optional): restricts `read`/`write`/`edit`/`apply_patch` paths and native prompt image auto-load paths to the workspace directory (useful if you allow absolute paths today and want a single guardrail).
+- `tools.fs.workspaceOnly: true` (optional): restricts `read`/`write`/`edit`/`apply_patch` paths to the workspace directory (useful if you allow absolute paths today and want a single guardrail).
+- `tools.fs.allowedDirectories: [...]` (optional): restricts filesystem tool paths to a specific list of directories. When specified, this takes precedence over `workspaceOnly`. Supports both absolute and relative paths (relative to workspace root). Useful for multi-project access control.
 - Keep filesystem roots narrow: avoid broad roots like your home directory for agent workspaces/sandbox workspaces. Broad roots can expose sensitive local files (for example state/config under `~/.openclaw`) to filesystem tools.
 
 ### 5) Secure baseline (copy/paste)
