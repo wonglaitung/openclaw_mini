@@ -64,7 +64,8 @@
       "ask": "off"
     },
     "fs": {
-      "workspaceOnly": false
+      "workspaceOnly": false,
+      "allowedDirectories": ["/data/project-a", "/data/project-b/src", "/home/user/shared-docs"]
     }
   },
   "gateway": {
