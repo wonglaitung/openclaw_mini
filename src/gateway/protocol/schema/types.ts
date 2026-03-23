@@ -117,6 +117,7 @@ export type CronRunsParams = SchemaType<"CronRunsParams">;
 export type CronRunLogEntry = SchemaType<"CronRunLogEntry">;
 export type LogsTailParams = SchemaType<"LogsTailParams">;
 export type LogsTailResult = SchemaType<"LogsTailResult">;
+export type LogsAvailableDatesResult = SchemaType<"LogsAvailableDatesResult">;
 export type ExecApprovalsGetParams = SchemaType<"ExecApprovalsGetParams">;
 export type ExecApprovalsSetParams = SchemaType<"ExecApprovalsSetParams">;
 export type ExecApprovalsNodeGetParams = SchemaType<"ExecApprovalsNodeGetParams">;

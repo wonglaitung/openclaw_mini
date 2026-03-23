@@ -112,6 +112,7 @@ import {
   ChatSendParamsSchema,
   LogsTailParamsSchema,
   LogsTailResultSchema,
+  LogsAvailableDatesResultSchema,
 } from "./logs-chat.js";
 import {
   NodeDescribeParamsSchema,
@@ -287,6 +288,7 @@ export const ProtocolSchemas = {
   CronRunLogEntry: CronRunLogEntrySchema,
   LogsTailParams: LogsTailParamsSchema,
   LogsTailResult: LogsTailResultSchema,
+  LogsAvailableDatesResult: LogsAvailableDatesResultSchema,
   ExecApprovalsGetParams: ExecApprovalsGetParamsSchema,
   ExecApprovalsSetParams: ExecApprovalsSetParamsSchema,
   ExecApprovalsNodeGetParams: ExecApprovalsNodeGetParamsSchema,

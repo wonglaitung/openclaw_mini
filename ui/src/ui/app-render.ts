@@ -1985,11 +1985,16 @@ export function renderApp(state: AppViewState) {
                   levelFilters: state.logsLevelFilters,
                   autoFollow: state.logsAutoFollow,
                   truncated: state.logsTruncated,
+                  logType: state.logsLogType,
+                  logDate: state.logsLogDate,
+                  availableDates: state.logsAvailableDates,
                   onFilterTextChange: (next) => (state.logsFilterText = next),
                   onLevelToggle: (level, enabled) => {
                     state.logsLevelFilters = { ...state.logsLevelFilters, [level]: enabled };
                   },
                   onToggleAutoFollow: (next) => (state.logsAutoFollow = next),
+                  onLogTypeChange: (logType) => state.handleLogsLogTypeChange(logType),
+                  onLogDateChange: (date) => state.handleLogsDateChange(date),
                   onRefresh: () => loadLogs(state, { reset: true }),
                   onExport: (lines, label) => state.exportLogs(lines, label),
                   onScroll: (event) => state.handleLogsScroll(event),

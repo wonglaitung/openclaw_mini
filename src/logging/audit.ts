@@ -62,7 +62,7 @@ let currentAuditDate: string | null = null;
 /**
  * Generate audit log filename with date suffix
  */
-function getAuditLogFileName(): string {
+export function getAuditLogFileName(): string {
   const baseName = auditConfig.file || "audit.log";
   const ext = path.extname(baseName);
   const nameWithoutExt = path.basename(baseName, ext);

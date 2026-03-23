@@ -116,3 +116,93 @@
 - 类型定义：更新 `src/config/types.gateway.ts` 的 `GatewayAuditConfig`
 - Zod Schema：更新 `src/config/zod-schema.ts`，添加 `rotateDaily` 字段
 - 验证：日志文件成功创建在 `~/.openclaw/logs/audit-2026-03-23.log`
+
+## 2026-03-23 - 日志页面审计日志选择功能
+- 需求：在日志页面可以选择查看主日志或审计日志
+- 后端 API 修改：
+  - 更新 `src/gateway/protocol/schema/logs-chat.ts`：添加 `logType` 参数（main/audit）
+  - 修改 `src/gateway/server-methods/logs.ts`：
+    - 添加 `isAuditLogFile` 和 `resolveAuditLogFile` 函数
+    - 修改 `logs.tail` 处理函数支持 `logType` 参数
+    - 导出 `getAuditLogFileName` 函数（`src/logging/audit.ts`）
+- 前端控制器修改（`ui/src/ui/controllers/logs.ts`）：
+  - 添加 `logsLogType: "main" | "audit"` 状态
+  - 添加 `AuditEntry` 类型定义
+  - 添加 `parseAuditLogLine` 函数解析审计日志
+  - 修改 `loadLogs` 函数传递 `logType` 参数
+- 前端 UI 修改：
+  - 更新 `ui/src/ui/app.ts`：添加 `logsLogType` 状态和 `handleLogsLogTypeChange` 处理函数
+  - 修改 `ui/src/ui/views/logs.ts`：
+    - 添加 `parseAuditLogs` 和 `filterAuditLogs` 函数
+    - 添加 `renderAuditLogTable` 函数以表格形式展示审计日志
+    - 在主日志模式下隐藏日志级别过滤器
+  - 更新 `ui/src/ui/app-render.ts`：传递 `logType` 和 `onLogTypeChange` 参数
+  - 更新 `ui/src/ui/app-view-state.ts`：添加 `logsLogType` 类型定义
+- 样式修改（`ui/src/styles/components.css`）：
+  - 添加 `.audit-table` 表格样式
+  - 添加状态颜色样式（success/error/warning/blocked）
+  - 表格头固定，支持悬停高亮
+- 审计日志表格列：
+  - Time：时间戳
+  - Type：日志类型（tool_call/tool_result/messaging/decision）
+  - Tool：工具名称
+  - Action：操作或操作摘要
+  - Status：状态（成功/错误/阻止/警告）
+  - Duration：执行时长（毫秒）
+  - Details：详细信息（消息/错误/目标）
+- 构建和部署：`pnpm build` 和 `pnpm ui:build` 成功，服务已重启
+- 使用方式：在 Logs 页面的过滤器区域选择 "Main Log" 或 "Audit Log"
+- 审计日志以表格形式展示，而不是原始 JSON 格式
+
+## 2026-03-23 - 审计日志表格详情优化
+- 需求：用户关注操作的具体内容（如打开什么文件、做了什么操作）
+- 表格列优化：从 7 列简化为 6 列，重点关注关键信息
+- 新增 `formatAuditDetails` 函数：智能提取和格式化操作信息
+  - 优先级：operationSummary → params（read/write/edit/apply_patch/bash/grep/find）→ message → error → target
+  - 文件操作显示文件路径：`read: /path/to/file`
+  - 命令执行显示命令：`bash: ls -la /data/pyspider`
+  - 搜索操作显示模式和路径：`grep: pattern in /path`
+  - 查找操作显示模式：`find: *.ts`
+- 样式优化：
+  - Details 列设置为 300-600px 宽度
+  - 文本溢出时显示省略号
+- 构建和部署：`pnpm ui:build` 成功，服务已重新加载
+
+## 2026-03-23 - 日志页面默认显示审计日志
+- 需求：默认打开审计日志，因为审计日志更常用且信息量更丰富
+- 修改 `ui/src/ui/app.ts`：将 `logsLogType` 默认值从 `"main"` 改为 `"audit"`
+- 构建和部署：`pnpm ui:build` 成功，服务已重启
+- 使用方式：刷新浏览器，日志页面默认显示审计日志
+
+## 2026-03-23 - 审计日志日期选择功能
+- 需求：审计日志按日期滚动后，需要支持选择查看不同日期的日志
+- 后端 API 修改：
+  - 更新 `src/gateway/protocol/schema/logs-chat.ts`：
+    - 在 `LogsTailParamsSchema` 中添加 `date` 参数（格式：YYYY-MM-DD）
+    - 添加 `LogsAvailableDatesResultSchema` 返回可用日期列表
+  - 修改 `src/gateway/server-methods/logs.ts`：
+    - 添加 `logs.availableDates` 方法：返回可用的审计日志日期列表
+    - 添加 `resolveAuditLogFileByDate` 函数：根据日期生成日志文件路径
+    - 修改 `logs.tail` 方法：支持根据日期参数读取特定日期的日志
+  - 添加 `logs.availableDates` 到 `src/gateway/server-methods-list.ts` 方法列表
+  - 更新 `src/gateway/protocol/index.ts` 导出新类型
+- 前端控制器修改（`ui/src/ui/controllers/logs.ts`）：
+  - 添加 `logsDate` 状态（格式：YYYY-MM-DD）
+  - 添加 `availableAuditDates` 状态（可用日期列表）
+  - 添加 `loadAvailableAuditDates` 函数：加载可用日期列表
+  - 修改 `loadLogs` 函数：传递 `date` 参数
+- 前端 UI 修改：
+  - 更新 `ui/src/ui/app.ts`：
+    - 添加 `logsDate` 状态（默认为今天）
+    - 添加 `handleLogsDateChange` 处理函数
+  - 修改 `ui/src/ui/views/logs.ts`：
+    - 添加日期选择器下拉菜单（仅在审计日志模式下显示）
+    - 显示可用日期列表
+  - 更新 `ui/src/ui/app-render.ts`：传递 `logsDate` 和相关参数
+  - 更新 `ui/src/ui/app-view-state.ts`：添加 `logsDate` 类型定义
+- 类型定义更新：
+  - `src/gateway/protocol/schema/types.ts`：添加 `LogsAvailableDatesResult` 类型
+  - `src/gateway/protocol/schema/protocol-schemas.ts`：添加 schema 注册
+- 构建和部署：`pnpm build` 和 `pnpm ui:build` 成功，服务已重启
+- 使用方式：在审计日志页面，选择日期下拉菜单选择不同日期的日志
+- 日期列表：自动扫描 `~/.openclaw/logs/` 目录下的 `audit-YYYY-MM-DD.log` 文件

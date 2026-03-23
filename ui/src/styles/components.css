@@ -2206,6 +2206,66 @@
   font-family: var(--mono);
 }
 
+/* Audit Log Table */
+.audit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.audit-table thead {
+  position: sticky;
+  top: 0;
+  background: var(--card);
+  z-index: 1;
+}
+
+.audit-table th {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 2px solid var(--border);
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.audit-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.audit-table td:last-child {
+  min-width: 300px;
+  max-width: 600px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.audit-table tbody tr:hover {
+  background: var(--bg-hover);
+}
+
+.audit-table .mono {
+  font-family: var(--mono);
+}
+
+.audit-table .status-success {
+  color: var(--success);
+  font-weight: 500;
+}
+
+.audit-table .status-error,
+.audit-table .status-blocked {
+  color: var(--danger);
+  font-weight: 500;
+}
+
+.audit-table .status-warning {
+  color: var(--warn);
+  font-weight: 500;
+}
+
 @container (max-width: 620px) {
   .log-row {
     grid-template-columns: 70px 60px minmax(0, 1fr);

@@ -6,6 +6,8 @@ export const LogsTailParamsSchema = Type.Object(
     cursor: Type.Optional(Type.Integer({ minimum: 0 })),
     limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 5000 })),
     maxBytes: Type.Optional(Type.Integer({ minimum: 1, maximum: 1_000_000 })),
+    logType: Type.Optional(Type.Union([Type.Literal("main"), Type.Literal("audit")])),
+    date: Type.Optional(Type.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$" })),
   },
   { additionalProperties: false },
 );
@@ -18,6 +20,13 @@ export const LogsTailResultSchema = Type.Object(
     lines: Type.Array(Type.String()),
     truncated: Type.Optional(Type.Boolean()),
     reset: Type.Optional(Type.Boolean()),
+  },
+  { additionalProperties: false },
+);
+
+export const LogsAvailableDatesResultSchema = Type.Object(
+  {
+    dates: Type.Array(Type.String()),
   },
   { additionalProperties: false },
 );
