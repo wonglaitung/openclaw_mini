@@ -75,12 +75,31 @@ export function isPathInAllowedDirectories(
   allowedDirectories: string[],
 ): boolean {
   const path = require("path") as typeof import("path");
-  const normalizedTarget = path.normalize(path.resolve(targetPath));
+
+  // Handle Windows paths in WSL (e.g., D:\Movies -> /mnt/d/Movies)
+  let normalizedTarget = targetPath;
+  if (/^[A-Za-z]:[\\/]/.test(targetPath)) {
+    // Windows absolute path
+    const drive = targetPath[0].toLowerCase();
+    const restPath = targetPath.substring(2).replace(/\\/g, "/");
+    normalizedTarget = `/mnt/${drive}/${restPath}`;
+  } else {
+    normalizedTarget = path.normalize(path.resolve(targetPath));
+  }
 
   return allowedDirectories.some((allowedDir) => {
-    // 将 allowedDir 也转换为绝对路径并规范化，移除 trailing slashes
-    const normalizedAllowed = path.normalize(path.resolve(allowedDir)).replace(/[/\\]+$/, "");
-    // 检查目标路径是否等于允许目录或是其子目录
+    // Handle Windows paths in allowedDirectories
+    let normalizedAllowed = allowedDir;
+    if (/^[A-Za-z]:[\\/]/.test(allowedDir)) {
+      // Windows absolute path
+      const drive = allowedDir[0].toLowerCase();
+      const restPath = allowedDir.substring(2).replace(/\\/g, "/");
+      normalizedAllowed = `/mnt/${drive}/${restPath}`;
+    } else {
+      normalizedAllowed = path.normalize(path.resolve(allowedDir)).replace(/[/\\]+$/, "");
+    }
+
+    // Check if target path equals allowed directory or is a subdirectory
     return (
       normalizedTarget === normalizedAllowed ||
       normalizedTarget.startsWith(normalizedAllowed + path.sep)

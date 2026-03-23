@@ -51,6 +51,7 @@ const MAX_ADAPTIVE_READ_PAGES = 8;
 type OpenClawReadToolOptions = {
   modelContextWindowTokens?: number;
   imageSanitization?: ImageSanitizationLimits;
+  allowedDirectories?: string[];
 };
 
 type ReadTruncationDetails = {
@@ -596,6 +597,7 @@ type SandboxToolParams = {
   bridge: SandboxFsBridge;
   modelContextWindowTokens?: number;
   imageSanitization?: ImageSanitizationLimits;
+  allowedDirectories?: string[];
 };
 
 export function createSandboxedReadTool(params: SandboxToolParams) {
@@ -605,6 +607,7 @@ export function createSandboxedReadTool(params: SandboxToolParams) {
   return createOpenClawReadTool(base, {
     modelContextWindowTokens: params.modelContextWindowTokens,
     imageSanitization: params.imageSanitization,
+    allowedDirectories: params.allowedDirectories,
   });
 }
 
@@ -645,7 +648,7 @@ export function createHostWorkspaceEditTool(
 
 export function createOpenClawReadTool(
   base: AnyAgentTool,
-  options?: OpenClawReadToolOptions,
+  options?: OpenClawReadToolOptions & { allowedDirectories?: string[] },
 ): AnyAgentTool {
   const patched = patchToolSchemaForClaudeCompatibility(base);
   return {
@@ -656,6 +659,27 @@ export function createOpenClawReadTool(
         normalized ??
         (params && typeof params === "object" ? (params as Record<string, unknown>) : undefined);
       assertRequiredParams(record, CLAUDE_PARAM_GROUPS.read, base.name);
+
+      // Validate path against allowedDirectories if configured
+      const filePath = typeof record?.path === "string" ? String(record?.path) : "";
+      if (filePath && options?.allowedDirectories && options.allowedDirectories.length > 0) {
+        // Handle Windows paths in WSL (e.g., D:\Movies -> /mnt/d/Movies)
+        let resolvedPath = filePath;
+        if (/^[A-Za-z]:[\\/]/.test(filePath)) {
+          // Windows absolute path
+          const drive = filePath[0].toLowerCase();
+          const restPath = filePath.substring(2).replace(/\\/g, "/");
+          resolvedPath = `/mnt/${drive}/${restPath}`;
+        } else {
+          resolvedPath = path.resolve(filePath);
+        }
+
+        const isAllowed = isPathInAllowedDirectories(resolvedPath, options.allowedDirectories);
+        if (!isAllowed) {
+          throw createFsAccessError("EACCES", filePath);
+        }
+      }
+
       const result = await executeReadWithAdaptivePaging({
         base,
         toolCallId,
@@ -663,12 +687,12 @@ export function createOpenClawReadTool(
         signal,
         maxBytes: resolveAdaptiveReadMaxBytes(options),
       });
-      const filePath = typeof record?.path === "string" ? String(record.path) : "<unknown>";
+      const finalFilePath = filePath || "<unknown>";
       const strippedDetailsResult = stripReadTruncationContentDetails(result);
-      const normalizedResult = await normalizeReadImageResult(strippedDetailsResult, filePath);
+      const normalizedResult = await normalizeReadImageResult(strippedDetailsResult, finalFilePath);
       return sanitizeToolResultImages(
         normalizedResult,
-        `read:${filePath}`,
+        `read:${finalFilePath}`,
         options?.imageSanitization,
       );
     },

@@ -109,6 +109,8 @@ function createProps(overrides: Partial<AgentsProps> = {}): AgentsProps {
     onAgentSkillsClear: () => undefined,
     onAgentSkillsDisableAll: () => undefined,
     onSetDefault: () => undefined,
+    onWorkspaceOnlyChange: () => undefined,
+    onAllowedDirectoriesChange: () => undefined,
     ...overrides,
   };
 }

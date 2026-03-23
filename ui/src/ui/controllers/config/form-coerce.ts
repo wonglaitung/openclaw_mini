@@ -153,7 +153,15 @@ export function coerceFormValues(value: unknown, schema: JsonSchema): unknown {
     if (!itemsSchema) {
       return value;
     }
-    return value.map((item) => coerceFormValues(item, itemsSchema)).filter((v) => v !== undefined);
+    const result = value.map((item) => coerceFormValues(item, itemsSchema));
+    // Filter out undefined values
+    const filtered = result.filter((v) => v !== undefined);
+    // For string arrays, also filter out empty strings after trimming
+    // This is important for allowedDirectories where users may leave inputs blank
+    if (itemsSchema.type === "string" && !Array.isArray(itemsSchema.type)) {
+      return filtered.filter((v) => typeof v !== "string" || v.trim().length > 0);
+    }
+    return filtered;
   }
 
   return value;

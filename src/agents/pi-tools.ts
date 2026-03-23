@@ -378,6 +378,7 @@ export function createOpenClawCodingTools(options?: {
           bridge: sandboxFsBridge!,
           modelContextWindowTokens: options?.modelContextWindowTokens,
           imageSanitization,
+          allowedDirectories,
         });
         return [
           workspaceOnly
@@ -391,6 +392,7 @@ export function createOpenClawCodingTools(options?: {
       const wrapped = createOpenClawReadTool(freshReadTool, {
         modelContextWindowTokens: options?.modelContextWindowTokens,
         imageSanitization,
+        allowedDirectories,
       });
       return [workspaceOnly ? wrapToolWorkspaceRootGuard(wrapped, workspaceRoot) : wrapped];
     }
