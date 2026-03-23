@@ -1179,6 +1179,14 @@ export function renderApp(state: AppViewState) {
                   onWorkspaceOnlyChange: (value) => {
                     updateConfigFormValue(state, ["tools", "fs", "workspaceOnly"], value);
                   },
+                  onAllowedDirectoriesChange: (directories) => {
+                    // Don't filter during editing; allow empty strings for UI state
+                    updateConfigFormValue(
+                      state,
+                      ["tools", "fs", "allowedDirectories"],
+                      directories,
+                    );
+                  },
                   onModelChange: (agentId, modelId) => {
                     const index = modelId ? ensureAgentIndex(agentId) : findAgentIndex(agentId);
                     if (index < 0) {

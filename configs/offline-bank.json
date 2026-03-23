@@ -1,7 +1,7 @@
 {
   "meta": {
     "lastTouchedVersion": "2026.3.14",
-    "lastTouchedAt": "2026-03-23T02:21:41.532Z"
+    "lastTouchedAt": "2026-03-23T02:35:37.961Z"
   },
   "logging": {
     "level": "info"
@@ -58,7 +58,7 @@
         "model": {
           "primary": "local-openai/qwen3.5-plus"
         },
-        "skills": [],
+        "skills": ["tencent_stock"],
         "tools": {
           "allow": ["bash", "read", "write", "edit"]
         }
@@ -74,7 +74,7 @@
     },
     "fs": {
       "workspaceOnly": false,
-      "allowedDirectories": ["/data/project-a", "/data/project-b/src", "/home/user/shared-docs"]
+      "allowedDirectories": ["/home/user/shared-docs"]
     }
   },
   "media": {

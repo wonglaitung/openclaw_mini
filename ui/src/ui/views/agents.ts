@@ -112,6 +112,7 @@ export type AgentsProps = {
   onAgentSkillsDisableAll: (agentId: string) => void;
   onSetDefault: (agentId: string) => void;
   onWorkspaceOnlyChange: (value: boolean) => void;
+  onAllowedDirectoriesChange: (directories: string[]) => void;
 };
 
 export function renderAgents(props: AgentsProps) {
@@ -359,6 +360,7 @@ export function renderAgents(props: AgentsProps) {
                         onConfigReload: props.onConfigReload,
                         onConfigSave: props.onConfigSave,
                         onWorkspaceOnlyChange: props.onWorkspaceOnlyChange,
+                        onAllowedDirectoriesChange: props.onAllowedDirectoriesChange,
                       })
                     : nothing
                 }
@@ -410,11 +412,33 @@ function renderAgentFilesystem(props: {
   onConfigReload: () => void;
   onConfigSave: () => void;
   onWorkspaceOnlyChange: (value: boolean) => void;
+  onAllowedDirectoriesChange: (directories: string[]) => void;
 }) {
   const toolsConfig =
-    (props.configForm as { tools?: { fs?: { workspaceOnly?: boolean } } } | null)?.tools?.fs ?? {};
+    (
+      props.configForm as {
+        tools?: { fs?: { workspaceOnly?: boolean; allowedDirectories?: string[] } };
+      } | null
+    )?.tools?.fs ?? {};
   const workspaceOnly = toolsConfig.workspaceOnly ?? false;
+  const allowedDirectories = toolsConfig.allowedDirectories ?? [];
   const editable = Boolean(props.configForm) && !props.configLoading && !props.configSaving;
+
+  const addDirectory = () => {
+    const next = [...allowedDirectories, ""];
+    props.onAllowedDirectoriesChange(next);
+  };
+
+  const updateDirectory = (index: number, value: string) => {
+    const next = [...allowedDirectories];
+    next[index] = value;
+    props.onAllowedDirectoriesChange(next);
+  };
+
+  const removeDirectory = (index: number) => {
+    const next = allowedDirectories.filter((_, i) => i !== index);
+    props.onAllowedDirectoriesChange(next);
+  };
 
   return html`
     <section class="card">
@@ -465,6 +489,58 @@ function renderAgentFilesystem(props: {
             />
             <span class="cfg-toggle__track"></span>
           </label>
+        </div>
+
+        <div style="margin-top: 24px;">
+          <div class="agent-tool-title" style="margin-bottom: 8px;">Allowed Directories</div>
+          <div class="agent-tool-sub" style="margin-bottom: 12px;">
+            Specify directories that agents are allowed to access. Subdirectories are automatically included.
+          </div>
+          ${
+            editable
+              ? html`
+                  <button class="btn btn--sm" @click=${addDirectory} style="margin-bottom: 12px;">
+                    Add Directory
+                  </button>
+                `
+              : nothing
+          }
+          ${
+            allowedDirectories.length === 0
+              ? html`
+                  <div class="callout info" style="margin-top: 8px">
+                    No allowed directories configured. Filesystem access is unrestricted.
+                  </div>
+                `
+              : html`
+                <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px;">
+                  ${allowedDirectories.map(
+                    (dir, index) =>
+                      html`
+                      <div class="row" style="gap: 8px; align-items: center;">
+                        <input
+                          class="field mono"
+                          .value=${dir}
+                          @input=${(e: Event) => updateDirectory(index, (e.target as HTMLInputElement).value)}
+                          ?disabled=${!editable}
+                          placeholder="/path/to/directory"
+                          autocomplete="off"
+                        />
+                        ${
+                          editable
+                            ? html`
+                                <button class="btn btn--sm" @click=${() => removeDirectory(index)} title="Remove">
+                                  ✕
+                                </button>
+                              `
+                            : nothing
+                        }
+                      </div>
+                    `,
+                  )}
+                </div>
+              `
+          }
         </div>
       </div>
     </section>
