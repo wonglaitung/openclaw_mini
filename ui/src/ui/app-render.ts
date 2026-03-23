@@ -1176,6 +1176,9 @@ export function renderApp(state: AppViewState) {
                     }
                     updateConfigFormValue(state, ["agents", "list", index, "skills"], []);
                   },
+                  onWorkspaceOnlyChange: (value) => {
+                    updateConfigFormValue(state, ["tools", "fs", "workspaceOnly"], value);
+                  },
                   onModelChange: (agentId, modelId) => {
                     const index = modelId ? ensureAgentIndex(agentId) : findAgentIndex(agentId);
                     if (index < 0) {

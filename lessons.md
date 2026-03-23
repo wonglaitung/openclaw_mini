@@ -62,10 +62,6 @@
   - 复用现有基础设施
   - 向后兼容
 
-- **方案2**：构建时动态排除
-  - 更灵活的构建配置
-  - 需要更多改动
-
 **4. 构建优化效果**
 
 - 包体积：~20%减少（500MB → 400MB）
@@ -124,31 +120,7 @@ export async function getBundledPlugins(): Promise<Plugin[]> {
 
 ### 构建测试经验
 
-**1. 构建脚本问题修复**
-
-- 问题：使用 `pnpm build:docker` 导致 A2UI bundle 缺失
-- 原因：`build:docker` 不包含 `canvas:a2ui:bundle` 步骤
-- 解决：改用 `pnpm build` 完整构建命令
-
-**2. 构建产物验证方法**
-
-```bash
-# 检查消息渠道目录
-ls dist/extensions/whatsapp/
-# 预期：只有 package.json 和 openclaw.plugin.json，无 index.js
-
-# 对比非排除插件
-ls dist/extensions/ollama/
-# 预期：有完整的 index.js
-```
-
-**3. 构建产物大小分析**
-
-- 发现：离线构建和正常构建都是 152M
-- 原因：基础框架代码占大部分，其他插件和依赖仍然存在
-- 结论：虽然大小相近，但实际代码确实被排除，目标达成
-
-**4. 构建产物结构**
+**1. 构建产物结构**
 
 **消息渠道目录**（离线模式）：
 
@@ -168,7 +140,7 @@ dist/extensions/ollama/
 └── index.js                  # ✅ 实际代码
 ```
 
-**5. node_modules 排除问题与解决**
+**2. node_modules 排除问题与解决**
 
 **问题描述**：
 
@@ -200,24 +172,6 @@ if (!fs.existsSync(indexJsPath)) {
 
 - 构建产物：152M → 36M（减少 116M，76%）
 - JS 文件：3,563 → 785（减少 2,778，78%）
-- 消息渠道 node_modules：完全排除（~118M）
-
-**6. 最终方案总结**
-
-**实施方案**：仅通过运行时脚本实现排除，不修改核心 API
-
-**修改内容**：
-
-1. `scripts/lib/optional-bundled-clusters.mjs`：扩展可选构建列表
-2. `scripts/stage-bundled-plugin-runtime.mjs`：跳过无代码插件
-3. `scripts/stage-bundled-plugin-runtime-deps.mjs`：跳过无代码插件
-4. 跨平台构建脚本：Bash/PowerShell/Python
-
-**关键决策**：
-
-- 优先考虑向后兼容性
-- 使用"外部脚本"而非"核心代码修改"
-- 通过文件系统检查而非构建配置来判断插件是否被排除
 
 ### Git 提交经验
 
@@ -228,51 +182,11 @@ if (!fs.existsSync(indexJsPath)) {
 3. 查看最近的提交记录以匹配风格
 4. 运行完整的检查：`pnpm check`（lint、format、tsgo等）
 
-**提交信息编写**：
-
-- 使用简洁的标题
-- 包含关键改动说明
-- 包含构建优化结果数据
-- 使用英文编写提交信息
-
 **遇到的问题和解决**：
 
 - 问题：TypeScript 类型错误导致提交失败
 - 原因：对核心 API 的修改过于激进，破坏了向后兼容性
 - 解决：回退对核心文件的修改，仅保留脚本和配置的改进
-
-**提交验证**：
-
-- 所有 lint 检查通过（0警告 0错误）
-- 所有 format 检查通过
-- TypeScript 类型检查通过
-- 插件 SDK 导出检查通过
-
-### 配置文件迁移经验
-
-**1. 配置版本迁移的常见问题**
-
-- 旧配置键：`agent.*`, `agent.model`
-- 新配置键：`agents.defaults.*`, `agents.defaults.model.primary/fallbacks`
-
-**2. 工具安全配置**
-
-- **profile 选择**：
-  - `minimal` - 最小工具集（bash/read/write/edit）
-  - 银行内网建议使用 `minimal` 减少攻击面
-
-- **exec 安全模式**：
-  - `allowlist` - 只允许 safeBins 中的二进制
-  - 银行内网必须使用 `allowlist`
-
-- **safeBins 配置**：
-  - 列出允许的可执行文件：python, node, npm, powershell, pwsh
-  - 通过 bash 工具调用，不是独立工具
-
-**3. 模型白名单配置**
-
-- 使用 `agents.defaults.models` 白名单控制 UI 显示的模型
-- UI 只显示白名单中的模型
 
 ### UI 菜单可见性控制实现经验
 
@@ -353,12 +267,6 @@ WebSocket 连接建立 → onHello → applySnapshot → loadConfig → configSn
 | 方案3：配置控制     | 灵活可调           | 需要配置管理             | 复杂环境    |
 | 方案4：混合方案     | 综合最优           | 实现复杂度适中           | 银行场景 ✅ |
 
-**选择理由**：
-
-- 方案4（混合）结合了独立审计日志和配置控制的优点
-- 满足银行审计需求（独立文件 + 结构化格式）
-- 不影响现有系统（主日志保持不变）
-
 **3. 审计日志模块设计**
 
 **A. 核心功能**
@@ -414,85 +322,6 @@ export type GatewayAuditConfig = {
 };
 ```
 
-**5. 工具调用集成**
-
-- 文件：`src/agents/pi-tools.before-tool-call.ts`
-- 记录时机：工具调用前 → 执行钩子 → 执行工具 → 记录结果
-- 记录内容：工具调用、执行结果、工具被阻止
-
-**6. Gateway 启动集成**
-
-- 文件：`src/gateway/server.impl.ts`
-- 函数：`startGatewayServer`
-- 时机：启动配置准备完成后，在 diagnostics 初始化之前
-
-**7. 遇到的问题和解决**
-
-**A. TypeScript 类型错误**
-
-- 问题：导入类型错误或类型不匹配
-- 解决：修复所有 TypeScript 类型错误，确保类型安全
-
-**B. 配置验证失败**
-
-- 问题：Zod schema 中缺少字段定义
-- 解决：在 `src/config/zod-schema.ts` 中添加 `audit` 字段
-
-**C. 模板字符串类型错误**
-
-- 问题：严格模式下，未知类型不能直接用于模板字符串
-- 解决：使用 `String(err)` 或 `${err as Error}` 明确转换
-
-**D. 对象字符串化警告**
-
-- 问题：`String(result)` 会导致对象变成 `[object Object]`
-- 解决：使用 `JSON.stringify(result)` 正确序列化对象
-
-**8. 经验教训**
-
-**A. 模块化设计的重要性**
-
-- 审计日志模块独立于主日志系统
-- 单一职责：只负责审计日志
-
-**B. 配置驱动的设计**
-
-- 通过配置文件控制审计日志行为
-- 支持不同环境的审计级别
-
-**C. 结构化日志的优势**
-
-- JSON 格式易于解析和分析
-- 支持日志查询和可视化
-
-**D. 性能优化策略**
-
-- 异步写入避免阻塞
-- 流式写入减少内存占用
-- 错误处理不影响主流程
-
-**E. 类型安全的重要性**
-
-- TypeScript 类型定义确保配置正确
-- Zod schema 运行时验证配置
-- 双重保障减少运行时错误
-
-**9. 最佳实践**
-
-**A. 审计日志内容**
-
-- ✅ 记录所有工具调用（工具名称、参数、时间戳）
-- ✅ 记录工具执行结果（成功/失败、耗时）
-- ✅ 记录安全策略阻止（工具被阻止原因）
-- ❌ 不要记录敏感信息（密码、密钥、个人信息）
-
-**B. 配置建议**
-
-- 生产环境：使用 `detailed` 级别
-- 开发环境：使用 `basic` 级别
-- 调试环境：使用 `verbose` 级别
-- 测试环境：使用 `none` 级别
-
 ### 文件系统访问控制实现经验（2026-03-22）
 
 **1. 需求分析**
@@ -505,12 +334,6 @@ export type GatewayAuditConfig = {
 | ----- | ----------------------------- | ---------------- | ------------------ | ---------- |
 | 方案1 | 使用现有 workspaceOnly        | 无需修改代码     | 仅支持单个工作区根 | ⭐⭐⭐     |
 | 方案2 | 扩展支持 allowedDirectories[] | 灵活、支持多目录 | 需要修改代码       | ⭐⭐⭐⭐⭐ |
-
-**选择方案 2 的原因**：
-
-- 灵活性高，支持多个指定目录
-- 向后兼容，workspaceOnly 仍可用
-- 代码改动最小化
 
 **3. 核心实现**
 
@@ -540,22 +363,6 @@ export function isPathInAllowedDirectories(
     );
   });
 }
-```
-
-**关键特性**：
-
-- ✅ 自动规范化路径（移除尾随斜杠、解析 `.` 和 `..`）
-- ✅ 支持绝对路径和相对路径
-- ✅ 子目录自动允许
-- ✅ 防止部分目录名匹配（`/data/project` ≠ `/data/project-a`）
-
-**C. 配置集成**
-
-```typescript
-export type FsToolsConfig = {
-  workspaceOnly?: boolean;
-  allowedDirectories?: string[];
-};
 ```
 
 **4. 路径处理特性**
@@ -632,57 +439,7 @@ export type FsToolsConfig = {
 - 原因：只解析了 targetPath，未解析 allowedDirectories
 - 解决：在比较时也解析 allowedDirectories
 
-**6. 配置说明最佳实践**
-
-**JSON 配置文件不支持注释**：
-
-❌ 错误（会导致 JSON 解析失败）：
-
-```json
-{
-  "allowedDirectories": [
-    // 这是一个注释 - JSON 不支持
-    "C:/Users/username/projects"
-  ]
-}
-```
-
-✅ 正确：
-
-```json
-{
-  "allowedDirectories": ["C:/Users/username/projects"]
-}
-```
-
-**说明位置**：
-
-- 配置说明应放在文档中（`docs/gateway/configuration-examples.md`）
-- 不要在 JSON 配置文件中添加注释
-
-**7. Windows 路径配置详解**
-
-**命令行 vs JSON 配置**：
-
-| 场景           | 推荐格式                                                  | 说明            |
-| -------------- | --------------------------------------------------------- | --------------- |
-| Windows 命令行 | `C:\Users\User\Downloads`                                 | 必须 use 反斜杠 |
-| JSON 配置文件  | `C:/Users/User/Downloads` 或 `C:\\Users\\User\\Downloads` | 推荐正斜杠      |
-| 代码中         | `C:/Users/User/Downloads`                                 | 推荐正斜杠      |
-
-**关键区别**：
-
-- Windows 命令行：`cd /Downloads` ❌（不支持正斜杠）
-- JSON 配置：`"C:/Users/User/Downloads"` ✅（Node.js 支持）
-- 代码中：`path.resolve("C:/Users/User/Downloads")` ✅（Node.js 支持）
-
-**推荐实践**：
-
-- 在 JSON 配置文件中使用正斜杠 `/`（更简洁）
-- 反斜杠需要转义为 `\\`（易出错）
-- Node.js 在 Windows 上自动处理正斜杠
-
-**8. 经验教训**
+**6. 经验教训**
 
 **A. 路径处理的复杂性**
 
@@ -695,16 +452,6 @@ export type FsToolsConfig = {
 
 - ✅ 保留 `workspaceOnly` 配置，默认行为不变
 - ✅ 当同时配置时，`allowedDirectories` 优先
-
-**C. 测试驱动开发的价值**
-
-- ✅ 18个测试用例覆盖所有场景
-- ✅ 测试发现并修复了两个边界情况
-
-**D. JSON 配置文件的限制**
-
-- ✅ JSON 标准不支持注释
-- ✅ 配置说明应放在文档中
 
 ### File System 标签页 UI 实现经验（2026-03-22）
 
@@ -740,27 +487,7 @@ const payload = {
 };
 ```
 
-**4. UI 类型定义更新**
-
-**文件**：`ui/src/ui/types.ts`
-
-**修改内容**：
-
-```typescript
-export type ChannelsStatusSnapshot = {
-  ts: number;
-  channelOrder: string[];
-  // ... 其他字段
-  menuVisibility?: Record<string, boolean | undefined>;
-  fsConfig?: {
-    workspaceOnly?: boolean;
-    allowedDirectories?: string[];
-  };
-  // ... 其他字段
-};
-```
-
-**5. UI 组件实现**
+**4. UI 组件实现**
 
 **文件**：`ui/src/ui/views/agents.ts`
 
@@ -771,7 +498,7 @@ export type ChannelsStatusSnapshot = {
 3. 更新标签页列表
 4. 添加 filesystem 面板渲染逻辑
 
-**6. 构建和部署**
+**5. 构建和部署**
 
 **构建流程**：
 
@@ -781,7 +508,7 @@ export type ChannelsStatusSnapshot = {
 修改配置文件（.json） → 重启 gateway
 ```
 
-**7. 遇到的问题和解决**
+**6. 遇到的问题和解决**
 
 **A. TypeScript 类型错误**
 
@@ -795,7 +522,7 @@ export type ChannelsStatusSnapshot = {
 
 **解决**：添加明确的类型注解
 
-**8. 经验教训**
+**7. 经验教训**
 
 **A. 类型一致性的重要性**
 
@@ -812,3 +539,197 @@ export type ChannelsStatusSnapshot = {
 - 修改后端代码 → `pnpm build`
 - 修改 UI 代码 → `pnpm ui:build`
 - 修改配置文件 → 重启 gateway
+
+## 2026-03-23
+
+### File System 标签页加载时序问题
+
+**1. 问题现象**
+
+- 初次打开 File System 标签时，数据不显示
+- 切换到其他菜单后，再回到 File System 标签，数据才能正确显示
+
+**2. 根本原因分析**
+
+- File System 标签页的数据来自 `props.channels.snapshot?.fsConfig`
+- `fsConfig` 通过 `channels.status` API 从后端获取（从 `cfg.tools?.fs` 读取配置）
+- 在 `onHello` 回调中，**没有调用 `loadChannels`**，所以初次连接时 `channels.snapshot` 不完整
+- 切换到其他菜单时，触发 `loadChannels` 调用，数据才被正确加载
+
+**3. 配置数据加载流程**
+
+正确的配置数据加载流程：
+
+```
+WebSocket 连接建立 → onHello → applySnapshot → loadConfig → configSnapshot 可用 → UI 渲染
+```
+
+**关键点**：
+
+- `applySnapshot` 只更新 `hello.snapshot`（系统状态、会话默认值等）
+- `loadConfig` 调用 API 获取完整配置
+- `loadChannels` 调用 API 获取频道状态（包括 fsConfig）
+- 三者独立，都需要在连接后执行
+
+**4. 解决方案**
+
+在 `ui/src/ui/app-gateway.ts` 的 `onHello` 回调中添加 `loadChannels` 调用：
+
+```typescript
+onHello: (hello) => {
+  // ... 其他代码
+  applySnapshot(host, hello);
+  void loadAssistantIdentity(host as unknown as OpenClawApp);
+  void loadAgents(host as unknown as OpenClawApp);
+  void loadConfig(host as unknown as OpenClawApp);
+  void loadChannels(host as unknown as OpenClawApp); // ← 添加这行
+  void loadHealthState(host as unknown as OpenClawApp);
+  // ...
+};
+```
+
+**5. 经验教训**
+
+**A. 数据加载的完整性**
+
+- 需要调用多个 API 才能获取完整的配置和状态
+- `loadConfig` 获取完整配置
+- `loadChannels` 获取频道状态和工具配置
+- 两者相互独立，都需要在连接后调用
+
+**B. 问题排查方法**
+
+- 通过浏览器开发者工具查看 API 请求
+- 检查 `channels.status` API 是否被调用
+- 检查 `state.channelsSnapshot` 是否包含 `fsConfig`
+
+**C. 参考已有经验**
+
+- lessons.md 中"菜单可见性配置加载时序问题"的经验
+- 配置数据加载流程是通用的模式
+
+### Workspace Only 开关控件实现经验
+
+**1. 需求背景**
+
+- 将 File System 标签页的 Workspace Only 从文本显示改为开关控件
+- 参考 Tools 标签的设计，提供更好的交互体验
+
+**2. UI 设计参考**
+
+参考 `agents-panels-tools-skills.ts` 中 tools 标签的实现：
+
+- 使用 `.cfg-toggle` 样式
+- 添加 Reload Config 和 Save 按钮
+- 添加配置加载状态提示
+- 支持编辑状态控制（配置加载中、保存中禁用）
+
+**3. 核心实现**
+
+**A. UI 组件更新**
+
+**文件**：`ui/src/ui/views/agents.ts`
+
+**修改内容**：
+
+1. 修改 `renderAgentFilesystem()` 函数，接受配置状态参数
+2. 添加开关控件：
+
+```typescript
+<label class="cfg-toggle">
+  <input
+    type="checkbox"
+    .checked=${workspaceOnly}
+    ?disabled=${!editable}
+    @change=${(e: Event) =>
+      props.onWorkspaceOnlyChange((e.target as HTMLInputElement).checked)}
+  />
+  <span class="cfg-toggle__track"></span>
+</label>
+```
+
+3. 添加 Reload Config 和 Save 按钮
+4. 添加配置加载状态提示
+
+**B. 事件处理**
+
+**文件**：`ui/src/ui/app-render.ts`
+
+**修改内容**：
+
+添加 `onWorkspaceOnlyChange` 函数：
+
+```typescript
+onWorkspaceOnlyChange: (value) => {
+  updateConfigFormValue(state, ["tools", "fs", "workspaceOnly"], value);
+};
+```
+
+**C. 类型定义更新**
+
+**文件**：`ui/src/ui/views/agents.ts`
+
+**修改内容**：
+
+在 `AgentsProps` 类型中添加：
+
+```typescript
+onWorkspaceOnlyChange: (value: boolean) => void;
+```
+
+**4. 构建和部署**
+
+**构建流程**：
+
+```
+修改 UI 代码（.ts/.tsx）  → pnpm ui:build
+修改后端代码（.ts） → pnpm build
+修改配置文件（.json） → 重启 gateway
+```
+
+**5. 经验教训**
+
+**A. 遵循现有设计模式**
+
+- ✅ 参考 Tools 标签的开关实现
+- ✅ 使用相同的样式和交互方式
+- ✅ 保持 UI 一致性
+
+**B. 配置编辑的最佳实践**
+
+- ✅ 添加 Reload Config 和 Save 按钮
+- ✅ 显示配置加载和保存状态
+- ✅ 在配置加载中或保存中禁用编辑
+- ✅ 显示未保存状态提示
+
+**C. 事件处理模式**
+
+- ✅ 使用 `updateConfigFormValue` 更新配置
+- ✅ 配置路径：`["tools", "fs", "workspaceOnly"]`
+- ✅ 修改后需要调用 `saveConfig` 保存
+
+**D. 类型安全**
+
+- ✅ 同步更新类型定义
+- ✅ 确保所有使用该函数的地方类型一致
+
+### 文档维护经验
+
+**1. 文档简化**
+
+- 简化 `progress.txt`：从 500+ 行减少到 ~100 行（减少 80%）
+- 简化 `lessons.md`：从 2345 行减少到 ~700 行（减少 70%）
+- 删除重复内容，保留核心里程碑和重要经验
+
+**2. 文档维护原则**
+
+- ✅ 删除重复内容
+- ✅ 保留核心里程碑和重要数据
+- ✅ 保持清晰结构，便于快速浏览
+- ✅ 重点记录问题和解决方案
+
+**3. 文档更新时机**
+
+- ✅ 每次重要功能实现后更新
+- ✅ 发现新的问题和解决方案后更新
+- ✅ 定期回顾和简化文档

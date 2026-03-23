@@ -56,3 +56,27 @@
 - 在 Agents 页面添加 File System 标签
 - 显示 `workspaceOnly` 和 `allowedDirectories` 配置
 - 提交：commit 965e8fdab
+
+## 2026-03-23 - 文档简化
+- 简化 `progress.txt`：从 500+ 行减少到 ~100 行（减少 80%）
+- 简化 `lessons.md`：从 2345 行减少到 ~700 行（减少 70%）
+- 删除重复内容，保留核心里程碑和重要经验
+- 提交：commit cba7351d01
+
+## 2026-03-23 - File System 标签页加载问题修复
+- 问题：初次打开 File System 标签时数据不显示，需要切换其他菜单后再回来
+- 根因：`onHello` 回调中缺少 `loadChannels` 调用，导致 `channels.snapshot` 不完整
+- 解决：在 `ui/src/ui/app-gateway.ts` 的 `onHello` 回调中添加 `void loadChannels(host as unknown as OpenClawApp)`
+- 参考：lessons.md 中"菜单可见性配置加载时序问题"的经验
+- 修改文件：`ui/src/ui/app-gateway.ts`
+
+## 2026-03-23 - Workspace Only 开关控件
+- 将 File System 标签页的 Workspace Only 从文本显示改为开关控件
+- 参考 Tools 标签的设计，使用 `.cfg-toggle` 样式
+- 添加 Reload Config 和 Save 按钮
+- 添加配置加载状态提示
+- 实现切换逻辑：通过 `updateConfigFormValue(state, ["tools", "fs", "workspaceOnly"], value)` 更新配置
+- 修改文件：
+  - `ui/src/ui/views/agents.ts`：更新 UI 组件和类型定义
+  - `ui/src/ui/app-render.ts`：添加 `onWorkspaceOnlyChange` 处理函数
+- 构建：UI 和后端均已构建并重启服务
