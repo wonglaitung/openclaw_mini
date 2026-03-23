@@ -744,6 +744,22 @@ export const OpenClawSchema = z
         channelHealthCheckMinutes: z.number().int().min(0).optional(),
         channelStaleEventThresholdMinutes: z.number().int().min(1).optional(),
         channelMaxRestartsPerHour: z.number().int().min(1).optional(),
+        audit: z
+          .object({
+            enabled: z.boolean().optional(),
+            file: z.string().optional(),
+            level: z
+              .union([
+                z.literal("none"),
+                z.literal("basic"),
+                z.literal("detailed"),
+                z.literal("verbose"),
+              ])
+              .optional(),
+            rotateDaily: z.boolean().optional(),
+          })
+          .strict()
+          .optional(),
         tailscale: z
           .object({
             mode: z.union([z.literal("off"), z.literal("serve"), z.literal("funnel")]).optional(),
@@ -877,14 +893,6 @@ export const OpenClawSchema = z
               .optional(),
             allowCommands: z.array(z.string()).optional(),
             denyCommands: z.array(z.string()).optional(),
-          })
-          .strict()
-          .optional(),
-        audit: z
-          .object({
-            enabled: z.boolean().optional(),
-            file: z.string().optional(),
-            level: z.enum(["none", "basic", "detailed", "verbose"]).optional(),
           })
           .strict()
           .optional(),

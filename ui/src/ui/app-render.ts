@@ -918,6 +918,13 @@ export function renderApp(state: AppViewState) {
                   agentsList: state.agentsList,
                   selectedAgentId: resolvedAgentId,
                   activePanel: state.agentsPanel,
+                  menuVisibility: (
+                    configValue as {
+                      gateway?: {
+                        controlUi?: { menuVisibility?: Record<string, boolean | undefined> };
+                      };
+                    } | null
+                  )?.gateway?.controlUi?.menuVisibility,
                   config: {
                     form: configValue,
                     loading: state.configLoading,

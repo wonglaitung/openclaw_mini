@@ -500,4 +500,9 @@ export type GatewayAuditConfig = {
    * Default: "detailed".
    */
   level?: "none" | "basic" | "detailed" | "verbose";
+  /**
+   * Enable daily log rotation. When true, log files are suffixed with date (e.g., audit-2026-03-23.log).
+   * Default: true.
+   */
+  rotateDaily?: boolean;
 };

@@ -57,26 +57,62 @@
 - 显示 `workspaceOnly` 和 `allowedDirectories` 配置
 - 提交：commit 965e8fdab
 
-## 2026-03-23 - 文档简化
-- 简化 `progress.txt`：从 500+ 行减少到 ~100 行（减少 80%）
-- 简化 `lessons.md`：从 2345 行减少到 ~700 行（减少 70%）
-- 删除重复内容，保留核心里程碑和重要经验
-- 提交：commit cba7351d01
-
-## 2026-03-23 - File System 标签页加载问题修复
-- 问题：初次打开 File System 标签时数据不显示，需要切换其他菜单后再回来
-- 根因：`onHello` 回调中缺少 `loadChannels` 调用，导致 `channels.snapshot` 不完整
-- 解决：在 `ui/src/ui/app-gateway.ts` 的 `onHello` 回调中添加 `void loadChannels(host as unknown as OpenClawApp)`
-- 参考：lessons.md 中"菜单可见性配置加载时序问题"的经验
-- 修改文件：`ui/src/ui/app-gateway.ts`
-
-## 2026-03-23 - Workspace Only 开关控件
-- 将 File System 标签页的 Workspace Only 从文本显示改为开关控件
-- 参考 Tools 标签的设计，使用 `.cfg-toggle` 样式
-- 添加 Reload Config 和 Save 按钮
-- 添加配置加载状态提示
-- 实现切换逻辑：通过 `updateConfigFormValue(state, ["tools", "fs", "workspaceOnly"], value)` 更新配置
+## 2026-03-23 - Tool Access 菜单可见性过滤
+- 需求：当菜单被隐藏时，Tool Access 页面中对应的工具组也应该隐藏
+- 实现方案：添加菜单键到工具组 ID 的映射，根据 menuVisibility 过滤工具组
 - 修改文件：
-  - `ui/src/ui/views/agents.ts`：更新 UI 组件和类型定义
-  - `ui/src/ui/app-render.ts`：添加 `onWorkspaceOnlyChange` 处理函数
-- 构建：UI 和后端均已构建并重启服务
+  - `ui/src/ui/views/agents-panels-tools-skills.ts`：实现过滤逻辑
+  - `ui/src/ui/views/agents.ts`：添加 menuVisibility 参数传递
+  - `ui/src/ui/app-render.ts`：传递 menuVisibility 数据
+- 菜单映射：
+  - channels → messaging
+  - automation → automation
+  - infrastructure → sessions（不包含 runtime）
+  - nodes → nodes
+- 提交：commit 44116fb26f
+
+## 2026-03-23 - 工具配置优化（支持专业工具）
+- 修改 `tools.allow`：添加 grep, find, ls 等专业文件操作工具
+- 目的：减少对 bash 工具的依赖，使用更专业的文件操作工具
+- 新增工具：
+  - grep：搜索文件内容中的模式
+  - find：通过 glob 模式查找文件
+  - ls：列出目录内容
+- 配置文件：`configs/offline-bank.json`
+- 提交：commit 44116fb26f
+
+## 2026-03-23 - 工具白名单完整配置（支持 Windows）
+- 恢复 `safeBins` 完整列表：["python", "python3", "node", "npm", "powershell", "pwsh", "cmd", "cmd.exe"]
+- 目标环境：银行内网 Windows 系统
+- 支持 PowerShell 7+、PowerShell 5.1、cmd.exe
+- 跨平台兼容：确保 WSL 路径转换正常工作
+- 配置文件：`configs/offline-bank.json`
+
+## 2026-03-23 - 调试日志清理
+- 移除 `src/agents/pi-tools.read.ts` 中的 `console.error` 调试日志
+- 理由：audit.log 已经记录了所有工具操作，调试日志是冗余的
+- 提交：commit 44116fb26f
+
+## 2026-03-23 - 工具配置优化：支持银行内网 Windows 系统
+- 工具白名单：`["bash", "read", "write", "edit", "apply_patch", "grep", "find", "ls"]`
+- 执行白名单：`["python", "python3", "node", "npm", "powershell", "pwsh", "cmd", "cmd.exe"]`
+- 安全模式：`tools.exec.security: "allowlist"`
+- 关键特性：
+  - 支持 PowerShell Core 7+（跨平台）
+  - 支持 Windows CMD（原生）
+  - 自动降级策略：PowerShell 7 → PowerShell 5.1 → cmd.exe
+  - WSL 路径转换：Windows 路径 → `/mnt/{drive}/{path}`
+- 配置文件：`configs/offline-bank.json`
+
+## 2026-03-23 - 审计日志按日期滚动
+- 修改 `src/logging/audit.ts`：支持按日期滚动日志
+- 新增功能：
+  - `getAuditLogFileName()` 函数生成带日期的日志文件名（如 `audit-2026-03-23.log`）
+  - `checkLogRotation()` 函数自动检测日期变化并轮换日志
+  - 日志目录从 `~/.openclaw/audit.log` 改为 `~/.openclaw/logs/audit.log`
+- 配置更新：
+  - `gateway.audit.file`: `"logs/audit.log"`
+  - `gateway.audit.rotateDaily`: `true`
+- 类型定义：更新 `src/config/types.gateway.ts` 的 `GatewayAuditConfig`
+- Zod Schema：更新 `src/config/zod-schema.ts`，添加 `rotateDaily` 字段
+- 验证：日志文件成功创建在 `~/.openclaw/logs/audit-2026-03-23.log`

@@ -22,6 +22,8 @@ export interface AuditConfig {
   file?: string;
   /** Audit detail level */
   level: AuditLevel;
+  /** Enable daily log rotation */
+  rotateDaily?: boolean;
 }
 
 export interface AuditEntry {
@@ -49,11 +51,28 @@ export interface AuditEntry {
 let auditConfig: AuditConfig = {
   enabled: false,
   level: "detailed",
-  file: "audit.log",
+  file: "logs/audit.log",
+  rotateDaily: true,
 };
 
 let auditFilePath: string | null = null;
 let auditStream: fs.WriteStream | null = null;
+let currentAuditDate: string | null = null;
+
+/**
+ * Generate audit log filename with date suffix
+ */
+function getAuditLogFileName(): string {
+  const baseName = auditConfig.file || "audit.log";
+  const ext = path.extname(baseName);
+  const nameWithoutExt = path.basename(baseName, ext);
+
+  if (auditConfig.rotateDaily) {
+    const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+    return `${nameWithoutExt}-${today}${ext}`;
+  }
+  return baseName;
+}
 
 /**
  * Set audit logging configuration
@@ -83,13 +102,14 @@ function initializeAuditLogger(): void {
   }
 
   const stateDir = process.env.OPENCLAW_STATE_DIR || path.join(process.env.HOME || "", ".openclaw");
-  auditFilePath = path.join(stateDir, auditConfig.file);
+  const logsDir = path.join(stateDir, "logs");
+  const logFileName = getAuditLogFileName();
+  auditFilePath = path.join(logsDir, logFileName);
 
   try {
-    // Ensure directory exists
-    const dir = path.dirname(auditFilePath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+    // Ensure logs directory exists
+    if (!fs.existsSync(logsDir)) {
+      fs.mkdirSync(logsDir, { recursive: true });
     }
 
     // Create write stream with append mode
@@ -98,6 +118,9 @@ function initializeAuditLogger(): void {
     auditStream.on("error", (err) => {
       console.error(`Audit logger error: ${err}`);
     });
+
+    // Track current date for rotation
+    currentAuditDate = new Date().toISOString().split("T")[0];
   } catch (err) {
     console.error(`Failed to initialize audit logger: ${String(err)}`);
     auditStream = null;
@@ -113,6 +136,23 @@ function shutdownAuditLogger(): void {
     auditStream = null;
   }
   auditFilePath = null;
+  currentAuditDate = null;
+}
+
+/**
+ * Check if log rotation is needed
+ */
+function checkLogRotation(): void {
+  if (!auditConfig.rotateDaily || !auditStream) {
+    return;
+  }
+
+  const today = new Date().toISOString().split("T")[0];
+  if (currentAuditDate && currentAuditDate !== today) {
+    // Date changed, rotate logs
+    shutdownAuditLogger();
+    initializeAuditLogger();
+  }
 }
 
 /**
@@ -122,6 +162,9 @@ export function audit(entry: Omit<AuditEntry, "timestamp">): void {
   if (!auditConfig.enabled || !auditStream) {
     return;
   }
+
+  // Check if log rotation is needed
+  checkLogRotation();
 
   const auditEntry: AuditEntry = {
     timestamp: new Date().toISOString(),
