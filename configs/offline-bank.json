@@ -68,7 +68,7 @@
   "tools": {
     "exec": {
       "security": "allowlist",
-      "ask": "off",
+      "ask": "on-miss",
       "pathPrepend": ["scripts", "tools"],
       "safeBins": ["python", "python3", "node", "npm", "powershell", "pwsh", "cmd", "cmd.exe"]
     },
@@ -99,7 +99,7 @@
         "tools": false,
         "models": false,
         "config": true,
-        "nodes": false,
+        "nodes": true,
         "communications": false,
         "appearance": false,
         "automation": false,
