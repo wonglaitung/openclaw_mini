@@ -1,4 +1,17 @@
 {
+  "meta": {
+    "lastTouchedVersion": "2026.3.14",
+    "lastTouchedAt": "2026-03-23T02:21:41.532Z"
+  },
+  "logging": {
+    "level": "info"
+  },
+  "update": {
+    "checkOnStart": false,
+    "auto": {
+      "enabled": false
+    }
+  },
   "models": {
     "providers": {
       "local-openai": {
@@ -25,10 +38,6 @@
       }
     }
   },
-  "plugins": {
-    "enabled": true,
-    "allow": ["memory-core", "memory-lancedb"]
-  },
   "agents": {
     "defaults": {
       "model": {
@@ -44,8 +53,8 @@
     "list": [
       {
         "id": "default",
-        "name": "Default Agent",
         "default": true,
+        "name": "Default Agent",
         "model": {
           "primary": "local-openai/qwen3.5-plus"
         },
@@ -59,34 +68,38 @@
   "tools": {
     "exec": {
       "security": "allowlist",
-      "safeBins": ["python", "python3", "node", "npm", "powershell", "pwsh", "cmd", "cmd.exe"],
+      "ask": "off",
       "pathPrepend": ["scripts", "tools"],
-      "ask": "off"
+      "safeBins": ["python", "python3", "node", "npm", "powershell", "pwsh", "cmd", "cmd.exe"]
     },
     "fs": {
       "workspaceOnly": false,
       "allowedDirectories": ["/data/project-a", "/data/project-b/src", "/home/user/shared-docs"]
     }
   },
+  "media": {
+    "preserveFilenames": false
+  },
+  "commands": {
+    "native": "auto",
+    "nativeSkills": "auto",
+    "restart": true,
+    "ownerDisplay": "raw"
+  },
   "gateway": {
+    "port": 18789,
     "mode": "local",
     "bind": "loopback",
-    "port": 18789,
-    "auth": {
-      "mode": "token",
-      "token": "d535788e3e3e7bfea7f70ebf6e7fe9c08a3f8dc23b35c08f26d20dffa1d5782c"
-    },
     "controlUi": {
       "menuVisibility": {
         "channels": false,
+        "agents": true,
+        "sessions": false,
         "skills": false,
-        "nodes": false,
         "tools": false,
         "models": false,
         "config": true,
-        "agents": true,
-        "sessions": false,
-        "instances": false,
+        "nodes": false,
         "communications": false,
         "appearance": false,
         "automation": false,
@@ -94,8 +107,13 @@
         "aiAgents": false,
         "debug": false,
         "logs": true,
-        "docs": false
+        "docs": false,
+        "instances": false
       }
+    },
+    "auth": {
+      "mode": "token",
+      "token": "d535788e3e3e7bfea7f70ebf6e7fe9c08a3f8dc23b35c08f26d20dffa1d5782c"
     },
     "audit": {
       "enabled": true,
@@ -103,16 +121,8 @@
       "level": "detailed"
     }
   },
-  "update": {
-    "checkOnStart": false,
-    "auto": {
-      "enabled": false
-    }
-  },
-  "logging": {
-    "level": "info"
-  },
-  "media": {
-    "preserveFilenames": false
+  "plugins": {
+    "enabled": true,
+    "allow": ["memory-core", "memory-lancedb"]
   }
 }

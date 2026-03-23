@@ -111,6 +111,7 @@ export type AgentsProps = {
   onAgentSkillsClear: (agentId: string) => void;
   onAgentSkillsDisableAll: (agentId: string) => void;
   onSetDefault: (agentId: string) => void;
+  onWorkspaceOnlyChange: (value: boolean) => void;
 };
 
 export function renderAgents(props: AgentsProps) {
@@ -351,7 +352,13 @@ export function renderAgents(props: AgentsProps) {
                 ${
                   props.activePanel === "filesystem"
                     ? renderAgentFilesystem({
-                        fsConfig: props.channels.snapshot?.fsConfig,
+                        configForm: props.config.form,
+                        configLoading: props.config.loading,
+                        configSaving: props.config.saving,
+                        configDirty: props.config.dirty,
+                        onConfigReload: props.onConfigReload,
+                        onConfigSave: props.onConfigSave,
+                        onWorkspaceOnlyChange: props.onWorkspaceOnlyChange,
                       })
                     : nothing
                 }
@@ -396,39 +403,70 @@ function renderAgentTabs(
 }
 
 function renderAgentFilesystem(props: {
-  fsConfig?: {
-    workspaceOnly?: boolean;
-    allowedDirectories?: string[];
-  };
+  configForm: Record<string, unknown> | null;
+  configLoading: boolean;
+  configSaving: boolean;
+  configDirty: boolean;
+  onConfigReload: () => void;
+  onConfigSave: () => void;
+  onWorkspaceOnlyChange: (value: boolean) => void;
 }) {
-  const { fsConfig } = props;
-  const workspaceOnly = fsConfig?.workspaceOnly ?? false;
-  const allowedDirectories = fsConfig?.allowedDirectories ?? [];
+  const toolsConfig =
+    (props.configForm as { tools?: { fs?: { workspaceOnly?: boolean } } } | null)?.tools?.fs ?? {};
+  const workspaceOnly = toolsConfig.workspaceOnly ?? false;
+  const editable = Boolean(props.configForm) && !props.configLoading && !props.configSaving;
 
   return html`
-    <div class="card">
-      <div class="card-title">File System Configuration</div>
-      <div class="card-sub">Current filesystem access control settings</div>
-      <div style="margin-top: 16px;">
-        <div class="agent-kv" style="margin-bottom: 16px;">
-          <div class="label">Workspace Only</div>
-          <div>${workspaceOnly ? "Yes" : "No"}</div>
+    <section class="card">
+      <div class="row" style="justify-content: space-between;">
+        <div>
+          <div class="card-title">File System Configuration</div>
+          <div class="card-sub">Filesystem access control settings</div>
         </div>
-        ${
-          allowedDirectories.length > 0
-            ? html`
-          <div class="agent-kv">
-            <div class="label">Allowed Directories</div>
-            <div class="mono" style="white-space: pre-wrap;">${allowedDirectories.join("\n") || "None"}</div>
-          </div>
-        `
-            : html`
-                <div class="callout info" style="margin-top: 8px">
-                  No allowed directories configured. Filesystem access is unrestricted.
-                </div>
-              `
-        }
+        <div class="row" style="gap: 8px;">
+          <button class="btn btn--sm" ?disabled=${props.configLoading} @click=${props.onConfigReload}>
+            Reload Config
+          </button>
+          <button
+            class="btn btn--sm primary"
+            ?disabled=${props.configSaving || !props.configDirty}
+            @click=${props.onConfigSave}
+          >
+            ${props.configSaving ? "Saving…" : "Save"}
+          </button>
+        </div>
       </div>
-    </div>
+
+      ${
+        !props.configForm
+          ? html`
+              <div class="callout info" style="margin-top: 12px">
+                Load the gateway config to adjust filesystem access settings.
+              </div>
+            `
+          : nothing
+      }
+
+      <div style="margin-top: 16px;">
+        <div class="agent-tool-row">
+          <div>
+            <div class="agent-tool-title">Workspace Only</div>
+            <div class="agent-tool-sub">
+              When enabled, file operations are restricted to the workspace directory only.
+            </div>
+          </div>
+          <label class="cfg-toggle">
+            <input
+              type="checkbox"
+              .checked=${workspaceOnly}
+              ?disabled=${!editable}
+              @change=${(e: Event) =>
+                props.onWorkspaceOnlyChange((e.target as HTMLInputElement).checked)}
+            />
+            <span class="cfg-toggle__track"></span>
+          </label>
+        </div>
+      </div>
+    </section>
   `;
 }
