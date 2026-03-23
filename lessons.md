@@ -2587,3 +2587,130 @@ z.enum(["none", "basic", ...])
 - ✅ 新增字段都应该是可选的（`optional()`）
 - ✅ 提供合理的默认值
 - ✅ 不破坏现有配置文件
+
+### 配置文件管理经验（2026-03-23）
+
+**1. 问题发现**
+
+用户报告：Nodes 页面的 Exec approvals 配置与 `configs/offline-bank.json` 不一致
+
+- `configs/offline-bank.json` 中设置 `tools.exec.ask: "on-miss"`
+- Nodes 页面显示的默认值是 `off`
+
+**2. 根本原因**
+
+存在两个配置文件控制同一个功能：
+
+| 配置文件                          | 位置       | 作用                            | 优先级 |
+| --------------------------------- | ---------- | ------------------------------- | ------ |
+| `configs/offline-bank.json`       | 项目根目录 | 主配置文件（包含 `tools.exec`） | 低     |
+| `~/.openclaw/exec-approvals.json` | 用户主目录 | Exec 批准策略文件（运行时配置） | 高     |
+
+**优先级规则**：
+
+```
+Agent 覆盖（exec-approvals.json） > exec-approvals.json defaults > tools.exec（主配置）
+```
+
+**3. 设计问题分析**
+
+**问题 A：配置分散且不直观**
+
+- 同一个 `ask` 模式在两个地方配置
+- 用户修改主配置文件，但页面显示的却是另一个文件的值
+- 容易造成配置不一致
+
+**问题 B：优先级不清晰**
+
+- `exec-approvals.json` 优先级高于 `tools.exec`
+- 但用户不知道这个规则，可能导致配置修改不生效
+
+**问题 C：初始化问题**
+
+- `exec-approvals.json` 可能是在运行时创建的
+- 它的初始值可能没有从 `tools.exec` 继承
+
+**4. 改进方案**
+
+**方案：明确继承关系**
+
+```json
+// ~/.openclaw/exec-approvals.json
+{
+  "defaults": {
+    "security": "allowlist", // 从 tools.exec.security 继承
+    "ask": "on-miss" // 从 tools.exec.ask 继承
+  },
+  "agents": {
+    "default": {
+      // agent 覆盖（可选）
+    }
+  }
+}
+```
+
+**改进要点**：
+
+1. **初始化时从主配置继承**
+   - 如果 `exec-approvals.json` 不存在，创建时自动从 `tools.exec` 继承 defaults
+   - 如果 `exec-approvals.json` 的 defaults 为空，自动填充 `tools.exec` 的值
+
+2. **UI 清晰显示配置来源**
+
+   ```
+   Defaults
+     Security: allowlist (from config)
+     Ask: on-miss (from config)
+
+   Default Agent
+     Security: allowlist (Use default)
+     Ask: always (override)
+   ```
+
+3. **避免双重配置**
+   - `tools.exec` 只保留基础设置（security, ask, safeBins 等）
+   - `exec-approvals.json` 负责运行时策略和 agent 覆盖
+   - 不在两个地方重复配置相同的默认值
+
+4. **配置优先级明确**
+   - Agent 覆盖（`exec-approvals.json` 中 agent 配置）
+   - `exec-approvals.json` 的 defaults
+   - `tools.exec` 的值（作为 fallback）
+
+**5. 经验教训**
+
+**A. 配置设计原则**
+
+- ✅ 单一配置来源优先：如果可能，避免同一功能在多个地方配置
+- ✅ 清晰的优先级规则：让用户明确知道哪个配置会生效
+- ✅ 继承机制：子配置应该从父配置继承默认值
+- ✅ UI 显示来源：明确告诉用户值从哪里来
+
+**B. 配置文件职责划分**
+
+- ✅ 主配置文件：定义基础设置和默认值
+- ✅ 运行时配置文件：管理动态策略和覆盖
+- ✅ 避免重复：不要在两个地方配置相同的默认值
+
+**C. 初始化策略**
+
+- ✅ 运行时配置文件初始化时从主配置继承
+- ✅ 自动同步：修改主配置时，自动更新运行时配置
+- ✅ 向后兼容：保持现有配置文件的兼容性
+
+**D. 调试技巧**
+
+- ✅ 使用 `find` 命令查找所有相关配置文件
+  ```bash
+  find ~/.openclaw -name "*exec-approvals*" -type f
+  ```
+- ✅ 检查配置文件的优先级规则
+- ✅ 使用浏览器开发者工具查看实际加载的配置
+- ✅ 检查 API 响应中的配置值
+
+**6. 后续优化方向**
+
+- 实现配置继承机制
+- UI 显示配置来源标签
+- 添加配置同步功能
+- 提供配置合并工具

@@ -206,3 +206,14 @@
 - 构建和部署：`pnpm build` 和 `pnpm ui:build` 成功，服务已重启
 - 使用方式：在审计日志页面，选择日期下拉菜单选择不同日期的日志
 - 日期列表：自动扫描 `~/.openclaw/logs/` 目录下的 `audit-YYYY-MM-DD.log` 文件
+
+## 2026-03-23 - 配置文件与页面显示不一致问题发现
+- 问题：Nodes 页面的 Exec approvals 配置与 `configs/offline-bank.json` 不一致
+- 原因：存在两个配置文件
+  - `configs/offline-bank.json` - 主配置文件（包含 `tools.exec`）
+  - `~/.openclaw/exec-approvals.json` - Exec 批准策略文件（独立文件）
+- 优先级：`exec-approvals.json` 的设置优先级高于 `tools.exec`
+- 设计问题：配置分散且不直观，容易造成配置不一致
+- 改进方案：明确继承关系，初始化时从主配置继承，UI 清晰显示配置来源
+- 文档：更新 `lessons.md` 添加配置管理经验
+- 配置：启用 nodes 菜单（`menuVisibility.nodes: true`）
