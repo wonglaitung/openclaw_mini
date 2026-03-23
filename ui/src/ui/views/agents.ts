@@ -80,6 +80,7 @@ export type AgentsProps = {
   selectedAgentId: string | null;
   activePanel: AgentsPanel;
   config: ConfigState;
+  menuVisibility?: Record<string, boolean | undefined>;
   channels: ChannelsState;
   cron: CronState;
   agentFiles: AgentFilesState;
@@ -285,6 +286,7 @@ export function renderAgents(props: AgentsProps) {
                         onOverridesChange: props.onToolsOverridesChange,
                         onConfigReload: props.onConfigReload,
                         onConfigSave: props.onConfigSave,
+                        menuVisibility: props.menuVisibility,
                       })
                     : nothing
                 }

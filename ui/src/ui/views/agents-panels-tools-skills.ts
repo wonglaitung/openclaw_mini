@@ -54,13 +54,14 @@ export function renderAgentTools(params: {
   onOverridesChange: (agentId: string, alsoAllow: string[], deny: string[]) => void;
   onConfigReload: () => void;
   onConfigSave: () => void;
+  menuVisibility?: Record<string, boolean | undefined>;
 }) {
   const config = resolveAgentConfig(params.configForm, params.agentId);
   const agentTools = config.entry?.tools ?? {};
   const globalTools = config.globalTools ?? {};
   const profile = agentTools.profile ?? globalTools.profile ?? "full";
   const profileOptions = resolveToolProfileOptions(params.toolsCatalogResult);
-  const toolSections = resolveToolSections(params.toolsCatalogResult);
+  const allToolSections = resolveToolSections(params.toolsCatalogResult);
   const profileSource = agentTools.profile
     ? "agent override"
     : globalTools.profile
@@ -68,6 +69,39 @@ export function renderAgentTools(params: {
       : "default";
   const hasAgentAllow = Array.isArray(agentTools.allow) && agentTools.allow.length > 0;
   const hasGlobalAllow = Array.isArray(globalTools.allow) && globalTools.allow.length > 0;
+
+  // 菜单键到工具组 ID 的映射（当菜单被隐藏时，隐藏对应的工具组）
+  const menuToToolSectionMap: Record<string, string[]> = {
+    channels: ["messaging"],
+    automation: ["automation"],
+    communications: ["messaging"],
+    infrastructure: ["sessions"],
+    nodes: ["nodes"],
+  };
+
+  // 记录需要隐藏的工具组 ID
+  const hiddenSectionIds = new Set<string>();
+
+  if (params.menuVisibility) {
+    for (const [menuKey, sectionIds] of Object.entries(menuToToolSectionMap)) {
+      // 如果菜单被隐藏，则隐藏对应的工具组
+      if (params.menuVisibility[menuKey] === false) {
+        for (const sectionId of sectionIds) {
+          hiddenSectionIds.add(sectionId);
+        }
+      }
+    }
+  }
+
+  // 根据 menuVisibility 过滤工具组
+  const toolSections = allToolSections.filter((section) => {
+    // 如果工具组在隐藏列表中，则不显示
+    if (hiddenSectionIds.has(section.id)) {
+      return false;
+    }
+    // 否则显示
+    return true;
+  });
   const editable =
     Boolean(params.configForm) &&
     !params.configLoading &&
@@ -97,6 +131,11 @@ export function renderAgentTools(params: {
     };
   };
   const enabledCount = toolIds.filter((toolId) => resolveAllowed(toolId).allowed).length;
+
+  // 计算总工具数（使用所有工具组，包括被过滤的）
+  const allToolIds = allToolSections.flatMap((section) => section.tools.map((tool) => tool.id));
+  const totalToolCount = allToolIds.length;
+  const visibleToolCount = toolIds.length;
 
   const updateTool = (toolId: string, nextEnabled: boolean) => {
     const nextAllow = new Set(
@@ -149,7 +188,7 @@ export function renderAgentTools(params: {
           <div class="card-title">Tool Access</div>
           <div class="card-sub">
             Profile + per-tool overrides for this agent.
-            <span class="mono">${enabledCount}/${toolIds.length}</span> enabled.
+            <span class="mono">${enabledCount}/${visibleToolCount}</span> enabled${visibleToolCount < totalToolCount ? html` (of ${totalToolCount} total)` : nothing}.
           </div>
         </div>
         <div class="row" style="gap: 8px;">

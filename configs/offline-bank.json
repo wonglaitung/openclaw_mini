@@ -1,7 +1,7 @@
 {
   "meta": {
     "lastTouchedVersion": "2026.3.14",
-    "lastTouchedAt": "2026-03-23T02:35:37.961Z"
+    "lastTouchedAt": "2026-03-23T06:29:05.143Z"
   },
   "logging": {
     "level": "info"
@@ -60,7 +60,7 @@
         },
         "skills": ["tencent_stock"],
         "tools": {
-          "allow": ["bash", "read", "write", "edit"]
+          "allow": ["bash", "read", "write", "edit", "apply_patch", "grep", "find", "ls"]
         }
       }
     ]
@@ -117,8 +117,9 @@
     },
     "audit": {
       "enabled": true,
-      "file": "audit.log",
-      "level": "detailed"
+      "file": "logs/audit.log",
+      "level": "detailed",
+      "rotateDaily": true
     }
   },
   "plugins": {
