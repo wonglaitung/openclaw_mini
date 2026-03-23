@@ -295,6 +295,9 @@ export type AppViewState = {
     logsLimit: number;
     logsMaxBytes: number;
     logsAtBottom: boolean;
+    logsLogType: "main" | "audit";
+    logsLogDate: string | null;
+    logsAvailableDates: string[];
     updateAvailable: import("./types.js").UpdateAvailable | null;
     attentionItems: AttentionItem[];
     paletteOpen: boolean;
@@ -366,6 +369,8 @@ export type AppViewState = {
     resetChatScroll: () => void;
     exportLogs: (lines: string[], label: string) => void;
     handleLogsScroll: (event: Event) => void;
+    handleLogsLogTypeChange: (logType: "main" | "audit") => void;
+    handleLogsDateChange: (date: string | null) => void;
     handleOpenSidebar: (content: string) => void;
     handleCloseSidebar: () => void;
     handleSplitRatioChange: (ratio: number) => void;

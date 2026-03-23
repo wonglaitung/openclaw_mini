@@ -13,6 +13,31 @@ export type LogsState = {
   logsLastFetchAt: number | null;
   logsLimit: number;
   logsMaxBytes: number;
+  logsLogType: "main" | "audit";
+  logsLogDate: string | null;
+  logsAvailableDates: string[];
+};
+
+export type AuditEntry = {
+  timestamp: string;
+  sessionId?: string;
+  sessionKey?: string;
+  runId?: string;
+  agentId?: string;
+  type: "tool_call" | "tool_result" | "messaging" | "decision";
+  toolName?: string;
+  toolCallId?: string;
+  action?: string;
+  operation?: string;
+  operationSummary?: string;
+  target?: string;
+  status?: "success" | "error" | "blocked" | "warning";
+  message?: string;
+  params?: Record<string, unknown>;
+  result?: Record<string, unknown>;
+  error?: string;
+  duration?: number;
+  metadata?: Record<string, unknown>;
 };
 
 const LOG_BUFFER_LIMIT = 2000;
@@ -114,6 +139,8 @@ export async function loadLogs(state: LogsState, opts?: { reset?: boolean; quiet
       cursor: opts?.reset ? undefined : (state.logsCursor ?? undefined),
       limit: state.logsLimit,
       maxBytes: state.logsMaxBytes,
+      logType: state.logsLogType,
+      date: state.logsLogDate ?? undefined,
     });
     const payload = res as {
       file?: string;
@@ -145,5 +172,21 @@ export async function loadLogs(state: LogsState, opts?: { reset?: boolean; quiet
     if (!opts?.quiet) {
       state.logsLoading = false;
     }
+  }
+}
+
+export async function loadAvailableDates(state: LogsState) {
+  if (!state.client || !state.connected) {
+    return;
+  }
+  try {
+    const res = await state.client.request("logs.availableDates", {
+      logType: state.logsLogType,
+    });
+    const payload = res as { dates?: string[] };
+    state.logsAvailableDates = Array.isArray(payload.dates) ? payload.dates : [];
+  } catch (err) {
+    console.error("Failed to load available dates:", err);
+    state.logsAvailableDates = [];
   }
 }

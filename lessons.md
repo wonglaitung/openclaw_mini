@@ -1373,6 +1373,1097 @@ export type GatewayAuditConfig = {
 - 添加日志大小限制（单文件最大大小）
 - 支持日志归档到远程存储（S3、OSS）
 
+### 日志页面审计日志选择功能实现经验（2026-03-23）
+
+**1. 需求背景**
+
+用户需求：在日志页面可以选择查看主日志或审计日志，便于区分系统日志和操作审计日志。
+
+**2. 方案设计**
+
+**核心思路**：
+
+- 通过 `logType` 参数区分主日志和审计日志
+- 审计日志以表格形式展示，主日志保持原有格式
+- 配置驱动的数据获取和展示
+
+**数据流设计**：
+
+```
+用户选择日志类型 → logsLogType 状态 → logs.tail API (logType 参数) → 后端读取对应日志文件 → 前端解析和展示
+```
+
+**3. 后端 API 实现**
+
+**A. Schema 更新**（`src/gateway/protocol/schema/logs-chat.ts`）
+
+```typescript
+export const LogsTailParamsSchema = Type.Object(
+  {
+    cursor: Type.Optional(Type.Integer({ minimum: 0 })),
+    limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 5000 })),
+    maxBytes: Type.Optional(Type.Integer({ minimum: 1, maximum: 1_000_000 })),
+    logType: Type.Optional(Type.Union([Type.Literal("main"), Type.Literal("audit")])),
+  },
+  { additionalProperties: false },
+);
+```
+
+**B. 日志文件解析**（`src/gateway/server-methods/logs.ts`）
+
+```typescript
+async function resolveAuditLogFile(basePath: string): Promise<string> {
+  const stateDir = process.env.OPENCLAW_STATE_DIR || path.join(process.env.HOME || "", ".openclaw");
+  const logsDir = path.join(stateDir, "logs");
+
+  const entries = await fs.readdir(logsDir, { withFileTypes: true }).catch(() => null);
+  if (!entries) {
+    return basePath;
+  }
+
+  const candidates = await Promise.all(
+    entries
+      .filter((entry) => entry.isFile() && AUDIT_LOG_RE.test(entry.name))
+      .map(async (entry) => {
+        const fullPath = path.join(logsDir, entry.name);
+        const fileStat = await fs.stat(fullPath).catch(() => null);
+        return fileStat ? { path: fullPath, mtimeMs: fileStat.mtimeMs } : null;
+      }),
+  );
+  const sorted = candidates
+    .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
+    .toSorted((a, b) => b.mtimeMs - a.mtimeMs);
+  return sorted[0]?.path ?? basePath;
+}
+```
+
+**C. logs.tail 处理函数更新**
+
+```typescript
+export const logsHandlers: GatewayRequestHandlers = {
+  "logs.tail": async ({ params, respond }) => {
+    const p = params as {
+      cursor?: number;
+      limit?: number;
+      maxBytes?: number;
+      logType?: "main" | "audit";
+    };
+    const logType = p.logType ?? "main";
+
+    try {
+      let file: string;
+      if (logType === "audit") {
+        file = await resolveAuditLogFile("");
+      } else {
+        const configuredFile = getResolvedLoggerSettings().file;
+        file = await resolveLogFile(configuredFile);
+      }
+
+      const result = await readLogSlice({
+        file,
+        cursor: p.cursor,
+        limit: p.limit ?? DEFAULT_LIMIT,
+        maxBytes: p.maxBytes ?? DEFAULT_MAX_BYTES,
+      });
+      respond(true, { file, ...result }, undefined);
+    } catch (err) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.UNAVAILABLE, `log read failed: ${String(err)}`),
+      );
+    }
+  },
+};
+```
+
+**4. 前端实现**
+
+**A. 控制器更新**（`ui/src/ui/controllers/logs.ts`）
+
+```typescript
+export type LogsState = {
+  client: GatewayBrowserClient | null;
+  connected: boolean;
+  logsLoading: boolean;
+  logsError: string | null;
+  logsCursor: number | null;
+  logsFile: string | null;
+  logType?: "main" | "audit"; // ← 新增
+  logsEntries: LogEntry[];
+  logsTruncated: boolean;
+  logsLastFetchAt: number | null;
+  logsLimit: number;
+  logsMaxBytes: number;
+};
+
+export async function loadLogs(state: LogsState, opts?: { reset?: boolean; quiet?: boolean }) {
+  if (!state.client || !state.connected) {
+    return;
+  }
+  if (state.logsLoading && !opts?.quiet) {
+    return;
+  }
+  if (!opts?.quiet) {
+    state.logsLoading = true;
+  }
+  state.logsError = null;
+  try {
+    const res = await state.client.request("logs.tail", {
+      cursor: opts?.reset ? undefined : (state.logsCursor ?? undefined),
+      limit: state.logsLimit,
+      maxBytes: state.logsMaxBytes,
+      logType: state.logType ?? "main", // ← 传递日志类型
+    });
+    // ... 处理结果
+  } catch (err) {
+    state.logsError = String(err);
+  } finally {
+    if (!opts?.quiet) {
+      state.logsLoading = false;
+    }
+  }
+}
+```
+
+**B. 审计日志解析**（`ui/src/ui/controllers/logs.ts`）
+
+```typescript
+export type AuditEntry = {
+  timestamp: string;
+  sessionId?: string;
+  sessionKey?: string;
+  runId?: string;
+  agentId?: string;
+  type: "tool_call" | "tool_result" | "messaging" | "decision";
+  toolName?: string;
+  toolCallId?: string;
+  action?: string;
+  operation?: string;
+  operationSummary?: string;
+  target?: string;
+  status?: "success" | "error" | "blocked" | "warning";
+  message?: string;
+  params?: Record<string, unknown>;
+  result?: Record<string, unknown>;
+  error?: string;
+  duration?: number;
+  metadata?: Record<string, unknown>;
+};
+
+export function parseAuditLogLine(line: string): AuditEntry | null {
+  if (!line.trim()) {
+    return null;
+  }
+  try {
+    return JSON.parse(line) as AuditEntry;
+  } catch {
+    return null;
+  }
+}
+```
+
+**C. UI 视图更新**（`ui/src/ui/views/logs.ts`）
+
+```typescript
+export type LogsProps = {
+  loading: boolean;
+  error: string | null;
+  file: string | null;
+  entries: LogEntry[];
+  filterText: string;
+  levelFilters: Record<LogLevel, boolean>;
+  autoFollow: boolean;
+  truncated: boolean;
+  logType: "main" | "audit"; // ← 新增
+  onFilterTextChange: (next: string) => void;
+  onLevelToggle: (level: LogLevel, enabled: boolean) => void;
+  onToggleAutoFollow: (next: boolean) => void;
+  onLogTypeChange: (logType: "main" | "audit") => void; // ← 新增
+  onRefresh: () => void;
+  onExport: (lines: string[], label: string) => void;
+  onScroll: (event: Event) => void;
+};
+
+export function renderLogs(props: LogsProps) {
+  const isAudit = props.logType === "audit";
+
+  return html`
+    <section class="card">
+      <div class="row" style="justify-content: space-between;">
+        <div>
+          <div class="card-title">Logs</div>
+          <div class="card-sub">Gateway file logs (JSONL).</div>
+        </div>
+        <div class="row" style="gap: 8px;">
+          <button class="btn" ?disabled=${props.loading} @click=${props.onRefresh}>
+            ${props.loading ? "Loading…" : "Refresh"}
+          </button>
+          <button
+            class="btn"
+            ?disabled=${filtered.length === 0}
+            @click=${() =>
+              props.onExport(
+                filtered.map((entry) => entry.raw),
+                exportLabel,
+              )}
+          >
+            Export ${exportLabel}
+          </button>
+        </div>
+      </div>
+
+      <div class="filters" style="margin-top: 14px;">
+        <label class="field" style="min-width: 150px;">
+          <span>Log Type</span>
+          <select
+            .value=${props.logType}
+            @change=${(e: Event) => {
+              const select = e.target as HTMLSelectElement;
+              props.onLogTypeChange(select.value as "main" | "audit");
+            }}
+          >
+            <option value="main">Main Log</option>
+            <option value="audit">Audit Log</option>
+          </select>
+        </label>
+        <!-- ... 其他过滤器 -->
+      </div>
+
+      ${!isAudit ? html`
+        <div class="chip-row" style="margin-top: 12px;">
+          ${LEVELS.map(
+            (level) => html`
+              <label class="chip log-chip ${level}">
+                <input
+                  type="checkbox"
+                  .checked=${props.levelFilters[level]}
+                  @change=${(e: Event) =>
+                    props.onLevelToggle(level, (e.target as HTMLInputElement).checked)}
+                />
+                <span>${level}</span>
+              </label>
+            `,
+          )}
+        </div>
+      ` : nothing}
+
+      <!-- 日志内容 -->
+      ${
+        isAudit && filtered.length > 0
+          ? renderAuditLogTable({ entries: filtered as AuditEntry[] })
+          : html`<div class="log-stream" style="margin-top: 12px;">${...}</div>`
+      }
+    </section>
+  `;
+}
+```
+
+**D. 主应用更新**（`ui/src/ui/app.ts`）
+
+```typescript
+@state() logsLogType: "main" | "audit" = "main"; // ← 新增
+
+handleLogsLogTypeChange(logType: "main" | "audit") {
+  this.logsLogType = logType;
+  this.logsCursor = null;
+  void loadLogs(this, { reset: true });
+}
+```
+
+**5. 审计日志表格实现**
+
+**A. 表格结构**
+
+```typescript
+function renderAuditLogTable(props: { entries: AuditEntry[] }) {
+  return html`
+    <table class="audit-table">
+      <thead>
+        <tr>
+          <th style="width: 80px;">Time</th>
+          <th style="width: 70px;">Agent</th>
+          <th style="width: 80px;">Tool</th>
+          <th style="width: 60px;">Status</th>
+          <th style="width: 80px;">Duration</th>
+          <th style="width: 300px;">Details</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${props.entries.map(
+          (entry) => html`
+            <tr class="audit-row">
+              <td class="mono">${formatTime(entry.timestamp)}</td>
+              <td class="mono">${entry.agentId ?? ""}</td>
+              <td class="mono">${entry.toolName ?? ""}</td>
+              <td><span class="audit-status ${entry.status ?? ""}">${entry.status ?? ""}</span></td>
+              <td class="mono">${entry.duration ? `${entry.duration}ms` : ""}</td>
+              <td class="mono">${formatAuditDetails(entry)}</td>
+            </tr>
+          `,
+        )}
+      </tbody>
+    </table>
+  `;
+}
+```
+
+**B. 详情格式化**
+
+```typescript
+function formatAuditDetails(entry: AuditEntry): string {
+  if (entry.operationSummary) {
+    return entry.operationSummary;
+  }
+
+  if (entry.params) {
+    const { toolName, action, path, pattern, command } = entry.params;
+
+    if (
+      toolName === "read" ||
+      toolName === "write" ||
+      toolName === "edit" ||
+      toolName === "apply_patch"
+    ) {
+      if (path) {
+        return `${toolName}: ${String(path)}`;
+      }
+    }
+
+    if (toolName === "bash") {
+      if (command) {
+        return `bash: ${String(command)}`;
+      }
+    }
+
+    if (toolName === "grep") {
+      if (pattern && path) {
+        return `grep: ${String(pattern)} in ${String(path)}`;
+      }
+    }
+
+    if (toolName === "find") {
+      if (pattern) {
+        return `find: ${String(pattern)}`;
+      }
+    }
+  }
+
+  if (entry.message) {
+    return entry.message;
+  }
+
+  if (entry.error) {
+    return entry.error;
+  }
+
+  if (entry.target) {
+    return entry.target;
+  }
+
+  return "";
+}
+```
+
+**C. 样式实现**（`ui/src/styles/components.css`）
+
+```css
+/* Audit Log Table */
+.audit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.audit-table thead {
+  position: sticky;
+  top: 0;
+  background: var(--card);
+  z-index: 1;
+}
+
+.audit-table th {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 2px solid var(--border);
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.audit-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.audit-row:hover {
+  background: var(--bg-hover);
+}
+
+/* Audit Log Status */
+.audit-status {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.audit-status.success {
+  background: rgba(34, 197, 94, 0.1);
+  color: rgb(34, 197, 94);
+}
+
+.audit-status.error,
+.audit-status.blocked {
+  background: rgba(239, 68, 68, 0.1);
+  color: rgb(239, 68, 68);
+}
+
+.audit-status.warning {
+  background: rgba(234, 179, 8, 0.1);
+  color: rgb(234, 179, 8);
+}
+```
+
+**6. 遇到的问题和解决**
+
+**问题 1**：审计日志解析失败
+
+- 原因：审计日志是 JSON Lines 格式，需要逐行解析
+- 解决：添加 `parseAuditLogLine` 函数，使用 `JSON.parse` 解析每一行
+
+**问题 2**：表格列宽度不合理
+
+- 原因：初始设计列过多，Details 列太窄
+- 解决：简化表格结构，将 Details 列设置为 300-600px 宽度
+
+**问题 3**：日志级别过滤器在审计日志模式下显示
+
+- 原因：审计日志没有日志级别概念
+- 解决：在审计日志模式下隐藏日志级别过滤器
+
+**7. 经验教训**
+
+**A. UI/UX 设计原则**
+
+- ✅ 审计日志以表格形式展示，比 JSON 格式更易读
+- ✅ 突出关键信息（操作内容、状态、时长）
+- ✅ 使用颜色区分不同状态
+- ✅ 根据日志类型调整 UI 元素（隐藏不适用的过滤器）
+
+**B. 数据解析的健壮性**
+
+- ✅ 使用 try-catch 处理 JSON 解析错误
+- ✅ 提供默认值，避免显示 undefined
+- ✅ 逐行解析大文件，避免内存问题
+
+**C. 配置驱动的灵活性**
+
+- ✅ 通过 `logType` 参数区分不同日志类型
+- ✅ 前端根据类型选择不同的展示方式
+- ✅ 后端统一 API，简化调用
+
+**D. 类型安全的重要性**
+
+- ✅ 定义明确的类型（`AuditEntry`）
+- ✅ 使用 TypeScript 确保类型正确
+- ✅ 避免运行时类型错误
+
+### 审计日志表格详情优化经验（2026-03-23）
+
+**1. 问题背景**
+
+用户反馈：审计日志虽然以表格形式展示了，但看不到具体做了什么操作（如打开什么文件、执行了什么命令）。
+
+**2. 根本原因分析**
+
+初始实现中，Details 列只是简单显示 `message` 或 `operationSummary` 字段，没有从 `params` 中提取关键信息。
+
+**3. 解决方案**
+
+**A. 优化表格结构**
+
+从 7 列简化为 6 列：
+
+- Time：时间戳（80px）
+- Agent：代理 ID（70px）
+- Tool：工具名称（80px）
+- Status：状态（60px）
+- Duration：执行时长（80px）
+- Details：操作详情（300-600px，最宽）
+
+**B. 智能提取操作详情**
+
+```typescript
+function formatAuditDetails(entry: AuditEntry): string {
+  // 优先级 1: operationSummary（最完整的描述）
+  if (entry.operationSummary) {
+    return entry.operationSummary;
+  }
+
+  // 优先级 2: 从 params 中提取关键信息
+  if (entry.params) {
+    const { toolName, action, path, pattern, command } = entry.params;
+
+    // 文件操作
+    if (["read", "write", "edit", "apply_patch"].includes(toolName)) {
+      if (path) {
+        return `${toolName}: ${String(path)}`;
+      }
+    }
+
+    // 命令执行
+    if (toolName === "bash") {
+      if (command) {
+        return `bash: ${String(command)}`;
+      }
+    }
+
+    // 搜索操作
+    if (toolName === "grep") {
+      if (pattern && path) {
+        return `grep: ${String(pattern)} in ${String(path)}`;
+      }
+    }
+
+    // 查找操作
+    if (toolName === "find") {
+      if (pattern) {
+        return `find: ${String(pattern)}`;
+      }
+    }
+  }
+
+  // 优先级 3: message
+  if (entry.message) {
+    return entry.message;
+  }
+
+  // 优先级 4: error
+  if (entry.error) {
+    return entry.error;
+  }
+
+  // 优先级 5: target
+  if (entry.target) {
+    return entry.target;
+  }
+
+  return "";
+}
+```
+
+**C. 样式优化**
+
+```css
+.audit-table td:nth-child(6) {
+  max-width: 600px;
+  min-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+```
+
+**4. 效果展示**
+
+优化后，审计日志会显示类似这样的详细信息：
+
+```
+Time        | Agent  | Tool    | Status   | Duration | Details
+-----------|--------|---------|----------|---------|--------------------------------------------------
+15:40:58   | default| exec    | success  | 15ms    | exec: ls -la /data/pyspider
+15:41:23   | default| read    | success  | 8ms     | read: /home/user/config.json
+15:42:01   | default| grep    | success  | 23ms    | grep: pattern in /path/to/file
+15:42:45   | default| find    | success  | 45ms    | find: *.ts
+```
+
+**5. 经验教训**
+
+**A. 用户体验的核心是信息密度**
+
+- ✅ 表格应突出最关键的信息
+- ✅ 避免冗余信息，简洁明了
+- ✅ 使用智能解析提取关键内容
+
+**B. 信息展示的优先级设计**
+
+- ✅ 最完整的描述优先（operationSummary）
+- ✅ 从结构化数据中提取关键信息（params）
+- ✅ 最后才使用通用字段（message/error/target）
+
+**C. 样式与内容的配合**
+
+- ✅ 为重要列分配更多空间
+- ✅ 文本溢出时显示省略号
+- ✅ 保持表格整体美观
+
+### 日志页面默认显示审计日志实现经验（2026-03-23）
+
+**1. 需求背景**
+
+用户反馈：审计日志更常用且信息量更丰富，希望默认打开审计日志而不是主日志。
+
+**2. 实现方案**
+
+**修改文件**：`ui/src/ui/app.ts`
+
+```typescript
+// 修改前
+@state() logsLogType: "main" | "audit" = "main";
+
+// 修改后
+@state() logsLogType: "main" | "audit" = "audit";
+```
+
+**3. 构建和部署**
+
+```bash
+# 构建 UI
+pnpm ui:build
+
+# 重启服务
+kill -HUP $(ps aux | grep openclaw-gateway | grep -v grep | awk '{print $2}')
+```
+
+**4. 经验教训**
+
+**A. 用户体验优化**
+
+- ✅ 根据用户习惯设置合理的默认值
+- ✅ 审计日志对管理员更有价值
+- ✅ 减少用户操作步骤
+
+**B. 简单的改动，巨大的影响**
+
+- ✅ 一行代码的改变，显著提升用户体验
+- ✅ 避免用户每次都要手动切换
+- ✅ 体现对用户需求的响应
+
+### 审计日志日期选择功能实现经验（2026-03-23）
+
+**1. 需求背景**
+
+用户需求：审计日志按日期滚动后，需要支持选择查看不同日期的日志，便于历史追溯。
+
+**2. 方案设计**
+
+**核心思路**：
+
+- 添加 `date` 参数到 `logs.tail` API，格式为 YYYY-MM-DD
+- 添加 `logs.availableDates` API，返回可用的日志日期列表
+- 前端添加日期选择器，自动加载可用日期
+
+**数据流设计**：
+
+```
+切换到审计日志 → 加载可用日期列表 → 用户选择日期 → logs.tail API (date 参数) → 读取指定日期的日志
+```
+
+**3. 后端 API 实现**
+
+**A. Schema 更新**（`src/gateway/protocol/schema/logs-chat.ts`）
+
+```typescript
+export const LogsTailParamsSchema = Type.Object(
+  {
+    cursor: Type.Optional(Type.Integer({ minimum: 0 })),
+    limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 5000 })),
+    maxBytes: Type.Optional(Type.Integer({ minimum: 1, maximum: 1_000_000 })),
+    logType: Type.Optional(Type.Union([Type.Literal("main"), Type.Literal("audit")])),
+    date: Type.Optional(Type.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$" })),
+  },
+  { additionalProperties: false },
+);
+
+export const LogsAvailableDatesResultSchema = Type.Object(
+  {
+    dates: Type.Array(Type.String()),
+  },
+  { additionalProperties: false },
+);
+```
+
+**B. 根据日期解析日志文件**（`src/gateway/server-methods/logs.ts`）
+
+```typescript
+async function resolveAuditLogFileByDate(date: string): Promise<string> {
+  const stateDir = process.env.OPENCLAW_STATE_DIR || path.join(process.env.HOME || "", ".openclaw");
+  const logsDir = path.join(stateDir, "logs");
+  const fileName = `audit-${date}.log`;
+  const filePath = path.join(logsDir, fileName);
+
+  // 检查文件是否存在
+  const stat = await fs.stat(filePath).catch(() => null);
+  if (stat) {
+    return filePath;
+  }
+
+  // 如果文件不存在，返回最新的审计日志
+  return resolveAuditLogFile("");
+}
+
+export const logsHandlers: GatewayRequestHandlers = {
+  "logs.tail": async ({ params, respond }) => {
+    const p = params as {
+      cursor?: number;
+      limit?: number;
+      maxBytes?: number;
+      logType?: "main" | "audit";
+      date?: string; // ← 新增
+    };
+    const logType = p.logType ?? "main";
+    const date = p.date;
+
+    try {
+      let file: string;
+      if (logType === "audit") {
+        if (date) {
+          file = await resolveAuditLogFileByDate(date);
+        } else {
+          file = await resolveAuditLogFile("");
+        }
+      } else {
+        const configuredFile = getResolvedLoggerSettings().file;
+        file = await resolveLogFile(configuredFile);
+      }
+
+      const result = await readLogSlice({
+        file,
+        cursor: p.cursor,
+        limit: p.limit ?? DEFAULT_LIMIT,
+        maxBytes: p.maxBytes ?? DEFAULT_MAX_BYTES,
+      });
+      respond(true, { file, ...result }, undefined);
+    } catch (err) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.UNAVAILABLE, `log read failed: ${String(err)}`),
+      );
+    }
+  },
+
+  "logs.availableDates": async ({ params, respond }) => {
+    const stateDir =
+      process.env.OPENCLAW_STATE_DIR || path.join(process.env.HOME || "", ".openclaw");
+    const logsDir = path.join(stateDir, "logs");
+
+    try {
+      const entries = await fs.readdir(logsDir, { withFileTypes: true }).catch(() => []);
+      const dates = entries
+        .filter((entry) => entry.isFile() && AUDIT_LOG_RE.test(entry.name))
+        .map((entry) => {
+          const match = entry.name.match(AUDIT_LOG_RE);
+          return match ? match[1] : null;
+        })
+        .filter((date): date is string => Boolean(date))
+        .sort()
+        .reverse(); // 最新的日期在前
+
+      respond(true, { dates }, undefined);
+    } catch (err) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.UNAVAILABLE, `Failed to list audit logs: ${String(err)}`),
+      );
+    }
+  },
+};
+```
+
+**C. 方法列表更新**（`src/gateway/server-methods-list.ts`）
+
+```typescript
+const BASE_METHODS = [
+  // ... 其他方法
+  "logs.tail",
+  "logs.availableDates", // ← 新增
+  // ... 其他方法
+];
+```
+
+**4. 前端实现**
+
+**A. 控制器更新**（`ui/src/ui/controllers/logs.ts`）
+
+```typescript
+export type LogsState = {
+  client: GatewayBrowserClient | null;
+  connected: boolean;
+  logsLoading: boolean;
+  logsError: string | null;
+  logsCursor: number | null;
+  logsFile: string | null;
+  logType?: "main" | "audit";
+  logsDate?: string; // ← 新增（YYYY-MM-DD 格式）
+  availableAuditDates: string[]; // ← 新增
+  logsEntries: LogEntry[];
+  logsTruncated: boolean;
+  logsLastFetchAt: number | null;
+  logsLimit: number;
+  logsMaxBytes: number;
+};
+
+export async function loadAvailableAuditDates(state: LogsState): Promise<void> {
+  if (!state.client || !state.connected) {
+    return;
+  }
+
+  try {
+    const res = await state.client.request("logs.availableDates", {});
+    const payload = res as { dates: string[] };
+    state.availableAuditDates = payload.dates || [];
+  } catch (err) {
+    console.error("Failed to load available audit dates:", err);
+  }
+}
+
+export async function loadLogs(state: LogsState, opts?: { reset?: boolean; quiet?: boolean }) {
+  if (!state.client || !state.connected) {
+    return;
+  }
+  if (state.logsLoading && !opts?.quiet) {
+    return;
+  }
+  if (!opts?.quiet) {
+    state.logsLoading = true;
+  }
+  state.logsError = null;
+  try {
+    const res = await state.client.request("logs.tail", {
+      cursor: opts?.reset ? undefined : (state.logsCursor ?? undefined),
+      limit: state.logsLimit,
+      maxBytes: state.logsMaxBytes,
+      logType: state.logType ?? "main",
+      date: state.logsDate, // ← 传递日期参数
+    });
+    // ... 处理结果
+  } catch (err) {
+    state.logsError = String(err);
+  } finally {
+    if (!opts?.quiet) {
+      state.logsLoading = false;
+    }
+  }
+}
+```
+
+**B. UI 视图更新**（`ui/src/ui/views/logs.ts`）
+
+```typescript
+export type LogsProps = {
+  loading: boolean;
+  error: string | null;
+  file: string | null;
+  entries: LogEntry[];
+  filterText: string;
+  levelFilters: Record<LogLevel, boolean>;
+  autoFollow: boolean;
+  truncated: boolean;
+  logType: "main" | "audit";
+  logsDate?: string; // ← 新增
+  availableAuditDates?: string[]; // ← 新增
+  onFilterTextChange: (next: string) => void;
+  onLevelToggle: (level: LogLevel, enabled: boolean) => void;
+  onToggleAutoFollow: (next: boolean) => void;
+  onLogTypeChange: (logType: "main" | "audit") => void;
+  onLogDateChange: (date: string) => void; // ← 新增
+  onRefresh: () => void;
+  onExport: (lines: string[], label: string) => void;
+  onScroll: (event: Event) => void;
+};
+
+export function renderLogs(props: LogsProps) {
+  const isAudit = props.logType === "audit";
+
+  return html`
+    <section class="card">
+      <!-- ... 标题和按钮 -->
+
+      <div class="filters" style="margin-top: 14px;">
+        <label class="field" style="min-width: 150px;">
+          <span>Log Type</span>
+          <select
+            .value=${props.logType}
+            @change=${(e: Event) => {
+              const select = e.target as HTMLSelectElement;
+              props.onLogTypeChange(select.value as "main" | "audit");
+            }}
+          >
+            <option value="main">Main Log</option>
+            <option value="audit">Audit Log</option>
+          </select>
+        </label>
+
+        ${isAudit
+          ? html`
+              <label class="field" style="min-width: 150px;">
+                <span>Date</span>
+                <select
+                  .value=${props.logsDate ?? ""}
+                  @change=${(e: Event) => {
+                    const select = e.target as HTMLSelectElement;
+                    props.onLogDateChange(select.value);
+                  }}
+                >
+                  <option value="">Today</option>
+                  ${(props.availableAuditDates ?? []).map(
+                    (date) => html`
+                      <option value=${date} .selected=${props.logsDate === date}>${date}</option>
+                    `,
+                  )}
+                </select>
+              </label>
+            `
+          : nothing}
+
+        <!-- ... 其他过滤器 -->
+      </div>
+
+      <!-- ... 日志内容 -->
+    </section>
+  `;
+}
+```
+
+**C. 主应用更新**（`ui/src/ui/app.ts`）
+
+```typescript
+@state() logsLogType: "main" | "audit" = "audit";
+@state() logsDate: string | undefined = undefined; // ← 新增
+@state() logsAvailableDates: string[] = []; // ← 新增
+
+handleLogsLogTypeChange(logType: "main" | "audit") {
+  this.logsLogType = logType;
+  this.logsCursor = null;
+
+  // 切换到审计日志时，加载可用日期
+  if (logType === "audit") {
+    void loadAvailableAuditDates(this);
+  }
+
+  void loadLogs(this, { reset: true });
+}
+
+handleLogsDateChange(date: string) {
+  this.logsDate = date || undefined;
+  this.logsCursor = null;
+  void loadLogs(this, { reset: true });
+}
+```
+
+**D. 应用设置更新**（`ui/src/ui/app-settings.ts`）
+
+```typescript
+export function setTabFromRoute(host: SettingsHost, tab: Tab) {
+  const prev = host.activeTab;
+  const next = tab;
+  // ... 其他代码
+
+  if (next === "logs") {
+    startLogsPolling(host as unknown as Parameters<typeof startLogsPolling>[0]);
+
+    // 加载可用日期
+    if (host.logsLogType === "audit") {
+      void loadAvailableAuditDates(
+        host as unknown as Parameters<typeof loadAvailableAuditDates>[0],
+      );
+    }
+  } else {
+    stopLogsPolling(host as unknown as Parameters<typeof stopLogsPolling>[0]);
+  }
+
+  // ... 其他代码
+}
+```
+
+**5. 类型定义更新**
+
+**A. Schema 类型**（`src/gateway/protocol/schema/types.ts`）
+
+```typescript
+export type LogsTailParams = SchemaType<"LogsTailParams">;
+export type LogsTailResult = SchemaType<"LogsTailResult">;
+export type LogsAvailableDatesResult = SchemaType<"LogsAvailableDatesResult">; // ← 新增
+```
+
+**B. Schema 注册**（`src/gateway/protocol/schema/protocol-schemas.ts`）
+
+```typescript
+export const ProtocolSchemas = {
+  // ... 其他 schema
+  LogsTailParams: LogsTailParamsSchema,
+  LogsTailResult: LogsTailResultSchema,
+  LogsAvailableDatesResult: LogsAvailableDatesResultSchema, // ← 新增
+  // ... 其他 schema
+};
+```
+
+**C. 协议导出**（`src/gateway/protocol/index.ts`）
+
+```typescript
+export {
+  // ... 其他导出
+  type LogsAvailableDatesResult,
+  LogsAvailableDatesResultSchema,
+  // ... 其他导出
+} from "./schema/logs-chat.js";
+```
+
+**6. 遇到的问题和解决**
+
+**问题 1**：类型导出冲突
+
+- 原因：在 `logs-chat.ts` 中同时导出了 `LogsAvailableDatesResult` 类型和 schema
+- 解决：移除 `logs-chat.ts` 中的类型导出，在 `types.ts` 中统一导出
+
+**问题 2**：日期选择器在切换日志类型时未更新
+
+- 原因：切换到审计日志时没有加载可用日期列表
+- 解决：在 `handleLogsLogTypeChange` 中调用 `loadAvailableAuditDates`
+
+**问题 3**：浏览器缓存导致更新不生效
+
+- 原因：构建文件被浏览器缓存
+- 解决：硬刷新页面（Ctrl + Shift + R 或 Cmd + Shift + R）
+
+**7. 经验教训**
+
+**A. API 设计的完整性**
+
+- ✅ 添加新功能时，需要考虑完整的 API 集合
+- ✅ `logs.tail` 支持日期参数 + `logs.availableDates` 提供日期列表
+- ✅ 前端需要先获取可用日期，再允许用户选择
+
+**B. 用户体验的连贯性**
+
+- ✅ 切换到审计日志时自动加载可用日期
+- ✅ 选择日期后自动刷新日志
+- ✅ 提供默认选项（"Today"）
+
+**C. 类型安全的维护**
+
+- ✅ 统一在 `types.ts` 中导出类型
+- ✅ 避免在不同文件中重复导出相同类型
+- ✅ 使用 TypeScript 确保类型一致
+
+**D. 错误处理的重要性**
+
+- ✅ 文件不存在时返回最新的审计日志
+- ✅ 加载日期列表失败时提供降级方案
+- ✅ 网络错误时显示错误信息
+
+**E. 构建流程的理解**
+
+- 修改后端代码 → `pnpm build`
+- 修改 UI 代码 → `pnpm ui:build`
+- 修改类型定义 → `pnpm build`（后端类型）
+- 修改配置文件 → 重启 gateway
+
 ### Zod Schema 同步更新经验（2026-03-23）
 
 **1. 问题背景**

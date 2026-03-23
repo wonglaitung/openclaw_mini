@@ -58,6 +58,7 @@ import { loadAssistantIdentity as loadAssistantIdentityInternal } from "./contro
 import type { DevicePairingList } from "./controllers/devices.ts";
 import type { ExecApprovalRequest } from "./controllers/exec-approval.ts";
 import type { ExecApprovalsFile, ExecApprovalsSnapshot } from "./controllers/exec-approvals.ts";
+import { loadLogs, loadAvailableDates } from "./controllers/logs.ts";
 import type { SkillMessage } from "./controllers/skills.ts";
 import type { GatewayBrowserClient, GatewayHelloOk } from "./gateway.ts";
 import type { Tab } from "./navigation.ts";
@@ -437,6 +438,9 @@ export class OpenClawApp extends LitElement {
   @state() logsLimit = 500;
   @state() logsMaxBytes = 250_000;
   @state() logsAtBottom = true;
+  @state() logsLogType: "main" | "audit" = "audit";
+  @state() logsLogDate: string | null = null;
+  @state() logsAvailableDates: string[] = [];
 
   client: GatewayBrowserClient | null = null;
   private chatScrollFrame: number | null = null;
@@ -519,6 +523,22 @@ export class OpenClawApp extends LitElement {
       this as unknown as Parameters<typeof handleLogsScrollInternal>[0],
       event,
     );
+  }
+
+  handleLogsLogTypeChange(logType: "main" | "audit") {
+    this.logsLogType = logType;
+    this.logsEntries = [];
+    this.logsCursor = null;
+    this.logsLogDate = null;
+    void loadLogs(this, { reset: true });
+    void loadAvailableDates(this);
+  }
+
+  handleLogsDateChange(date: string | null) {
+    this.logsLogDate = date;
+    this.logsEntries = [];
+    this.logsCursor = null;
+    void loadLogs(this, { reset: true });
   }
 
   exportLogs(lines: string[], label: string) {
