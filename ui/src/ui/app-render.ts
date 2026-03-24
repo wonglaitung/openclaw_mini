@@ -686,6 +686,19 @@ export function renderApp(state: AppViewState) {
                 onToggleGatewayPasswordVisibility: () => {
                   state.overviewShowGatewayPassword = !state.overviewShowGatewayPassword;
                 },
+                onResetToken: async () => {
+                  try {
+                    const res = await state.client?.request("config.resetToken", {});
+                    state.applySettings({
+                      ...state.settings,
+                      token: (res as { token: string }).token,
+                    });
+                    state.overviewShowGatewayToken = true;
+                    alert("Gateway token has been reset successfully.");
+                  } catch (err) {
+                    alert(`Failed to reset token: ${String(err)}`);
+                  }
+                },
                 onConnect: () => state.connect(),
                 onRefresh: () => state.loadOverview(),
                 onNavigate: (tab) => state.setTab(tab as import("./navigation.ts").Tab),

@@ -6,7 +6,7 @@
  */
 
 import type { SpawnOptions } from "node:child_process";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { auditToolCallBasic, getAuditConfig } from "../logging/audit.js";
@@ -66,12 +66,12 @@ export function resolvePowerShellPath(): string {
 
 function testPowerShellExecution(pwshPath: string): boolean {
   try {
-    // Test if PowerShell can execute a simple command
-    const result = spawn(pwshPath, ["-NoProfile", "-NonInteractive", "-Command", "1"], {
-      stdio: ["ignore", "pipe", "ignore"],
+    // Test if PowerShell can execute a simple command synchronously
+    const result = spawnSync(pwshPath, ["-NoProfile", "-NonInteractive", "-Command", "1"], {
+      stdio: ["ignore", "pipe", "pipe"],
       timeout: 5000,
     });
-    return result.spawnfile !== undefined;
+    return result.status === 0;
   } catch {
     return false;
   }

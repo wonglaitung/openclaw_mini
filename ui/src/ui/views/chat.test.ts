@@ -242,6 +242,7 @@ function createOverviewProps(overrides: Partial<OverviewProps> = {}): OverviewPr
     onSessionKeyChange: () => undefined,
     onToggleGatewayTokenVisibility: () => undefined,
     onToggleGatewayPasswordVisibility: () => undefined,
+    onResetToken: async () => undefined,
     onConnect: () => undefined,
     onRefresh: () => undefined,
     onNavigate: () => undefined,

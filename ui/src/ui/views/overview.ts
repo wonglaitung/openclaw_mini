@@ -52,6 +52,7 @@ export type OverviewProps = {
   onSessionKeyChange: (next: string) => void;
   onToggleGatewayTokenVisibility: () => void;
   onToggleGatewayPasswordVisibility: () => void;
+  onResetToken: () => Promise<void>;
   onConnect: () => void;
   onRefresh: () => void;
   onNavigate: (tab: string) => void;
@@ -221,11 +222,11 @@ export function renderOverview(props: OverviewProps) {
               : html`
                 <label class="field">
                   <span>${t("overview.access.token")}</span>
-                  <div style="display: flex; align-items: center; gap: 8px;">
+                  <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                     <input
                       type=${props.showGatewayToken ? "text" : "password"}
                       autocomplete="off"
-                      style="flex: 1;"
+                      style="flex: 1; min-width: 200px;"
                       .value=${props.settings.token}
                       @input=${(e: Event) => {
                         const v = (e.target as HTMLInputElement).value;
@@ -244,15 +245,33 @@ export function renderOverview(props: OverviewProps) {
                     >
                       ${props.showGatewayToken ? icons.eye : icons.eyeOff}
                     </button>
+                    <button
+                      type="button"
+                      class="btn btn--icon"
+                      style="width: 36px; height: 36px;"
+                      title="Reset token"
+                      aria-label="Reset token"
+                      @click=${async () => {
+                        if (
+                          window.confirm(
+                            "Are you sure you want to reset the gateway token? This will invalidate all existing connections.",
+                          )
+                        ) {
+                          await props.onResetToken();
+                        }
+                      }}
+                    >
+                      ${icons.refresh}
+                    </button>
                   </div>
                 </label>
                 <label class="field">
                   <span>${t("overview.access.password")}</span>
-                  <div style="display: flex; align-items: center; gap: 8px;">
+                  <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                     <input
                       type=${props.showGatewayPassword ? "text" : "password"}
                       autocomplete="off"
-                      style="flex: 1;"
+                      style="flex: 1; min-width: 200px;"
                       .value=${props.password}
                       @input=${(e: Event) => {
                         const v = (e.target as HTMLInputElement).value;

@@ -1,6 +1,7 @@
 import { exec } from "node:child_process";
 import { resolveAgentWorkspaceDir, resolveDefaultAgentId } from "../../agents/agent-scope.js";
 import { listChannelPlugins } from "../../channels/plugins/index.js";
+import { randomToken } from "../../commands/onboard-helpers.js";
 import {
   createConfigIO,
   loadConfig,
@@ -547,5 +548,82 @@ export const configHandlers: GatewayRequestHandlers = {
       }
       respond(true, { ok: true, path: configPath }, undefined);
     });
+  },
+  "config.resetToken": async ({ params: _params, respond, client, context }) => {
+    try {
+      // Use the same config IO that the gateway is using
+      const configIO = createConfigIO();
+      const snapshot = await configIO.readConfigFileSnapshotForWrite();
+
+      if (!snapshot.snapshot.exists || !snapshot.snapshot.raw) {
+        respond(
+          false,
+          undefined,
+          errorShape(ErrorCodes.INVALID_REQUEST, "config file does not exist"),
+        );
+        return;
+      }
+
+      const newToken = randomToken();
+      const actor = resolveControlPlaneActor(client);
+
+      const parsedRes = parseConfigJson5(snapshot.snapshot.raw);
+      if (!parsedRes.ok) {
+        respond(
+          false,
+          undefined,
+          errorShape(ErrorCodes.INVALID_REQUEST, `failed to parse config: ${parsedRes.error}`),
+        );
+        return;
+      }
+
+      // Update gateway.auth.token
+      const config = parsedRes.parsed as OpenClawConfig;
+      config.gateway = config.gateway ?? {};
+      config.gateway.auth = config.gateway.auth ?? {};
+      config.gateway.auth.mode = "token";
+      config.gateway.auth.token = newToken;
+
+      const validated = validateConfigObjectWithPlugins(config);
+      if (!validated.ok) {
+        respond(
+          false,
+          undefined,
+          errorShape(
+            ErrorCodes.INVALID_REQUEST,
+            summarizeConfigValidationIssues(validated.issues),
+            {
+              details: { issues: validated.issues },
+            },
+          ),
+        );
+        return;
+      }
+
+      await configIO.writeConfigFile(validated.config, {
+        envSnapshotForRestore: snapshot.writeOptions?.envSnapshotForRestore,
+      });
+
+      const changedPaths = ["gateway.auth.token"];
+      const actorStr = formatControlPlaneActor(actor);
+      context.logGateway.info(
+        `config.resetToken write ${actorStr} changedPaths=${summarizeChangedPaths(changedPaths)} restartReason=config.resetToken`,
+      );
+
+      respond(
+        true,
+        {
+          token: newToken,
+          timestamp: Date.now(),
+        },
+        undefined,
+      );
+    } catch (err) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.UNAVAILABLE, `failed to reset token: ${String(err)}`),
+      );
+    }
   },
 };
