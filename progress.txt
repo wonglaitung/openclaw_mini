@@ -41,3 +41,9 @@
 ## 2026-03-24 - 自定义版本号
 - 配置文件支持 `meta.version` 字段
 - UI 显示配置文件中的版本号（优先于运行时版本）
+
+## 2026-03-24 - 菜单可见性默认行为变更
+- 修改默认行为：从默认显示（除非设为 false）改为默认隐藏（除非设为 true）
+- 添加 chat/overview/usage/cron 四个菜单项到配置 schema
+- 更新类型定义、Zod schema 和 UI 渲染逻辑
+- 离线银行配置启用基础功能菜单（chat/overview/usage/cron/agents/config/nodes/logs）
