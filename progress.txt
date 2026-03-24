@@ -12,37 +12,8 @@
 - 扩展 `optionalBundledClusters`：加入13个消息渠道 + 10个可选插件
 - 修改 `src/channels/plugins/bundled.ts`：实现异步条件导入
 - 创建离线构建脚本：Bash/PowerShell/Python 三版本
-- 构建结果：包体积从 152M 降至 36M（减少 76%），JS 文件从 3,563 降至 785（减少 78%）
+- 构建结果：包体积从 152M 降至 36M（减少 76%），JS 文件从 3,563降至 785（减少 78%）
 - 提交：commit 31bf26ef9
-
-## 2026-03-20 - 银行内网配置优化
-- 工具权限：移除 profile，在 agent 中设置 `tools.allow: ["bash", "read", "write", "edit"]`
-- pathPrepend：使用相对路径 `["scripts", "tools"]`
-- 模型白名单：仅显示 local-openai/qwen3.5-plus
-
-## 2026-03-20 - UI 品牌自定义
-- 浏览器标题、侧边栏、登录页面：OpenClaw → AI Assistant
-- 登录页面简化：删除帮助文档和连接步骤
-- 图标更换：红色龙虾 → 绿色机器人 SVG
-- 提交：commit e0ec972e9
-
-## 2026-03-20 - 菜单可见性控制
-- 添加 `menuVisibility` 配置项
-- 当前状态：显示「配置、代理、日志」，隐藏其他所有菜单
-- 修复配置加载时序问题：在 onHello 回调中调用 loadConfig
-- 禁用内建技能：将 `skills/` 目录移至 `skills.backup/`
-
-## 2026-03-20 - 审计日志功能
-- 创建 `src/logging/audit.ts`：结构化 JSON 格式审计日志
-- 支持四个审计级别：none/basic/detailed/verbose
-- 集成工具调用记录和 Gateway 启动记录
-- 提交：commit 768d39d5a, e4d9723c2
-
-## 2026-03-20 - PowerShell 自动降级
-- 创建 `src/agents/shell-fallback.ts`：自动检测 PowerShell 可用性
-- 降级策略：PowerShell 7 → PowerShell 5.1 → cmd.exe
-- PowerShell 语法转换到 cmd.exe（`&&` → `&`, `$env:VAR` → `%VAR%`）
-- 审计日志集成：记录降级事件
 
 ## 2026-03-22 - 文件系统访问控制
 - 添加 `allowedDirectories: string[]` 配置选项
@@ -51,11 +22,6 @@
 - 测试：18 个测试用例，全部通过
 - 文档：`docs/gateway/security/index.md`, `docs/gateway/configuration-examples.md`
 - 提交：commit a1812bc59
-
-## 2026-03-22 - File System 标签页 UI
-- 在 Agents 页面添加 File System 标签
-- 显示 `workspaceOnly` 和 `allowedDirectories` 配置
-- 提交：commit 965e8fdab
 
 ## 2026-03-23 - Tool Access 菜单可见性过滤
 - 需求：当菜单被隐藏时，Tool Access 页面中对应的工具组也应该隐藏
@@ -71,28 +37,6 @@
   - nodes → nodes
 - 提交：commit 44116fb26f
 
-## 2026-03-23 - 工具配置优化（支持专业工具）
-- 修改 `tools.allow`：添加 grep, find, ls 等专业文件操作工具
-- 目的：减少对 bash 工具的依赖，使用更专业的文件操作工具
-- 新增工具：
-  - grep：搜索文件内容中的模式
-  - find：通过 glob 模式查找文件
-  - ls：列出目录内容
-- 配置文件：`configs/offline-bank.json`
-- 提交：commit 44116fb26f
-
-## 2026-03-23 - 工具白名单完整配置（支持 Windows）
-- 恢复 `safeBins` 完整列表：["python", "python3", "node", "npm", "powershell", "pwsh", "cmd", "cmd.exe"]
-- 目标环境：银行内网 Windows 系统
-- 支持 PowerShell 7+、PowerShell 5.1、cmd.exe
-- 跨平台兼容：确保 WSL 路径转换正常工作
-- 配置文件：`configs/offline-bank.json`
-
-## 2026-03-23 - 调试日志清理
-- 移除 `src/agents/pi-tools.read.ts` 中的 `console.error` 调试日志
-- 理由：audit.log 已经记录了所有工具操作，调试日志是冗余的
-- 提交：commit 44116fb26f
-
 ## 2026-03-23 - 工具配置优化：支持银行内网 Windows 系统
 - 工具白名单：`["bash", "read", "write", "edit", "apply_patch", "grep", "find", "ls"]`
 - 执行白名单：`["python", "python3", "node", "npm", "powershell", "pwsh", "cmd", "cmd.exe"]`
@@ -104,7 +48,7 @@
   - WSL 路径转换：Windows 路径 → `/mnt/{drive}/{path}`
 - 配置文件：`configs/offline-bank.json`
 
-## 2026-03-23 - 审计日志按日期滚动
+## 2026-03-23 - 审计日志按日期滚动和表格展示
 - 修改 `src/logging/audit.ts`：支持按日期滚动日志
 - 新增功能：
   - `getAuditLogFileName()` 函数生成带日期的日志文件名（如 `audit-2026-03-23.log`）
@@ -113,107 +57,20 @@
 - 配置更新：
   - `gateway.audit.file`: `"logs/audit.log"`
   - `gateway.audit.rotateDaily`: `true`
-- 类型定义：更新 `src/config/types.gateway.ts` 的 `GatewayAuditConfig`
-- Zod Schema：更新 `src/config/zod-schema.ts`，添加 `rotateDaily` 字段
-- 验证：日志文件成功创建在 `~/.openclaw/logs/audit-2026-03-23.log`
+- 日志页面功能：
+  - 审计日志以表格形式展示，包含 Time、Type、Tool、Action、Status、Duration、Details 列
+  - 默认显示审计日志，可切换主日志
+  - 日期选择功能，支持查看不同日期的日志
+  - 智能提取操作详情（文件路径、命令、搜索模式等）
+- 提交：commit c2ab8afa3b
 
-## 2026-03-23 - 日志页面审计日志选择功能
-- 需求：在日志页面可以选择查看主日志或审计日志
-- 后端 API 修改：
-  - 更新 `src/gateway/protocol/schema/logs-chat.ts`：添加 `logType` 参数（main/audit）
-  - 修改 `src/gateway/server-methods/logs.ts`：
-    - 添加 `isAuditLogFile` 和 `resolveAuditLogFile` 函数
-    - 修改 `logs.tail` 处理函数支持 `logType` 参数
-    - 导出 `getAuditLogFileName` 函数（`src/logging/audit.ts`）
-- 前端控制器修改（`ui/src/ui/controllers/logs.ts`）：
-  - 添加 `logsLogType: "main" | "audit"` 状态
-  - 添加 `AuditEntry` 类型定义
-  - 添加 `parseAuditLogLine` 函数解析审计日志
-  - 修改 `loadLogs` 函数传递 `logType` 参数
-- 前端 UI 修改：
-  - 更新 `ui/src/ui/app.ts`：添加 `logsLogType` 状态和 `handleLogsLogTypeChange` 处理函数
-  - 修改 `ui/src/ui/views/logs.ts`：
-    - 添加 `parseAuditLogs` 和 `filterAuditLogs` 函数
-    - 添加 `renderAuditLogTable` 函数以表格形式展示审计日志
-    - 在主日志模式下隐藏日志级别过滤器
-  - 更新 `ui/src/ui/app-render.ts`：传递 `logType` 和 `onLogTypeChange` 参数
-  - 更新 `ui/src/ui/app-view-state.ts`：添加 `logsLogType` 类型定义
-- 样式修改（`ui/src/styles/components.css`）：
-  - 添加 `.audit-table` 表格样式
-  - 添加状态颜色样式（success/error/warning/blocked）
-  - 表格头固定，支持悬停高亮
-- 审计日志表格列：
-  - Time：时间戳
-  - Type：日志类型（tool_call/tool_result/messaging/decision）
-  - Tool：工具名称
-  - Action：操作或操作摘要
-  - Status：状态（成功/错误/阻止/警告）
-  - Duration：执行时长（毫秒）
-  - Details：详细信息（消息/错误/目标）
-- 构建和部署：`pnpm build` 和 `pnpm ui:build` 成功，服务已重启
-- 使用方式：在 Logs 页面的过滤器区域选择 "Main Log" 或 "Audit Log"
-- 审计日志以表格形式展示，而不是原始 JSON 格式
-
-## 2026-03-23 - 审计日志表格详情优化
-- 需求：用户关注操作的具体内容（如打开什么文件、做了什么操作）
-- 表格列优化：从 7 列简化为 6 列，重点关注关键信息
-- 新增 `formatAuditDetails` 函数：智能提取和格式化操作信息
-  - 优先级：operationSummary → params（read/write/edit/apply_patch/bash/grep/find）→ message → error → target
-  - 文件操作显示文件路径：`read: /path/to/file`
-  - 命令执行显示命令：`bash: ls -la /data/pyspider`
-  - 搜索操作显示模式和路径：`grep: pattern in /path`
-  - 查找操作显示模式：`find: *.ts`
-- 样式优化：
-  - Details 列设置为 300-600px 宽度
-  - 文本溢出时显示省略号
-- 构建和部署：`pnpm ui:build` 成功，服务已重新加载
-
-## 2026-03-23 - 日志页面默认显示审计日志
-- 需求：默认打开审计日志，因为审计日志更常用且信息量更丰富
-- 修改 `ui/src/ui/app.ts`：将 `logsLogType` 默认值从 `"main"` 改为 `"audit"`
-- 构建和部署：`pnpm ui:build` 成功，服务已重启
-- 使用方式：刷新浏览器，日志页面默认显示审计日志
-
-## 2026-03-23 - 审计日志日期选择功能
-- 需求：审计日志按日期滚动后，需要支持选择查看不同日期的日志
-- 后端 API 修改：
-  - 更新 `src/gateway/protocol/schema/logs-chat.ts`：
-    - 在 `LogsTailParamsSchema` 中添加 `date` 参数（格式：YYYY-MM-DD）
-    - 添加 `LogsAvailableDatesResultSchema` 返回可用日期列表
-  - 修改 `src/gateway/server-methods/logs.ts`：
-    - 添加 `logs.availableDates` 方法：返回可用的审计日志日期列表
-    - 添加 `resolveAuditLogFileByDate` 函数：根据日期生成日志文件路径
-    - 修改 `logs.tail` 方法：支持根据日期参数读取特定日期的日志
-  - 添加 `logs.availableDates` 到 `src/gateway/server-methods-list.ts` 方法列表
-  - 更新 `src/gateway/protocol/index.ts` 导出新类型
-- 前端控制器修改（`ui/src/ui/controllers/logs.ts`）：
-  - 添加 `logsDate` 状态（格式：YYYY-MM-DD）
-  - 添加 `availableAuditDates` 状态（可用日期列表）
-  - 添加 `loadAvailableAuditDates` 函数：加载可用日期列表
-  - 修改 `loadLogs` 函数：传递 `date` 参数
-- 前端 UI 修改：
-  - 更新 `ui/src/ui/app.ts`：
-    - 添加 `logsDate` 状态（默认为今天）
-    - 添加 `handleLogsDateChange` 处理函数
-  - 修改 `ui/src/ui/views/logs.ts`：
-    - 添加日期选择器下拉菜单（仅在审计日志模式下显示）
-    - 显示可用日期列表
-  - 更新 `ui/src/ui/app-render.ts`：传递 `logsDate` 和相关参数
-  - 更新 `ui/src/ui/app-view-state.ts`：添加 `logsDate` 类型定义
-- 类型定义更新：
-  - `src/gateway/protocol/schema/types.ts`：添加 `LogsAvailableDatesResult` 类型
-  - `src/gateway/protocol/schema/protocol-schemas.ts`：添加 schema 注册
-- 构建和部署：`pnpm build` 和 `pnpm ui:build` 成功，服务已重启
-- 使用方式：在审计日志页面，选择日期下拉菜单选择不同日期的日志
-- 日期列表：自动扫描 `~/.openclaw/logs/` 目录下的 `audit-YYYY-MM-DD.log` 文件
-
-## 2026-03-23 - 配置文件与页面显示不一致问题发现
-- 问题：Nodes 页面的 Exec approvals 配置与 `configs/offline-bank.json` 不一致
-- 原因：存在两个配置文件
-  - `configs/offline-bank.json` - 主配置文件（包含 `tools.exec`）
-  - `~/.openclaw/exec-approvals.json` - Exec 批准策略文件（独立文件）
-- 优先级：`exec-approvals.json` 的设置优先级高于 `tools.exec`
-- 设计问题：配置分散且不直观，容易造成配置不一致
-- 改进方案：明确继承关系，初始化时从主配置继承，UI 清晰显示配置来源
-- 文档：更新 `lessons.md` 添加配置管理经验
-- 配置：启用 nodes 菜单（`menuVisibility.nodes: true`）
+## 2026-03-24 - 配置继承机制实现
+- 需求：`exec-approvals.json` 初始化时从 `tools.exec` 继承默认值
+- 实现方案：
+  - 修改 `loadExecApprovals()` 和 `ensureExecApprovals()`：添加 `toolsExec` 参数
+  - 添加 `resolveSecurityFromToolsExec()` 和 `resolveAskFromToolsExec()` 辅助函数
+  - 修改 `normalizeExecApprovals()`：当 `defaults` 为空时从 `tools.exec` 继承配置
+  - 更新所有调用点：gateway server-methods 和 node-host
+- 优先级：agent 覆盖 > `exec-approvals.json` defaults > `tools.exec` > 硬编码默认值
+- 测试验证：删除 `exec-approvals.json` 后，自动创建并正确继承配置
+- 提交：commit eb056e108e
