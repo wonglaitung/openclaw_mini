@@ -130,3 +130,40 @@ Agent 覆盖 > 运行时配置 defaults > 主配置 tools.exec > 硬编码默认
 - 保持 UI 一致性和逻辑性
 - 根据用户习惯设置合理默认值
 - UI 响应式布局支持小屏幕
+
+## 菜单可见性配置
+
+### 默认行为设计
+
+```typescript
+// 修改前：默认显示（除非设为 false）
+const isTabVisible = (tabKey: string): boolean => {
+  return menuVisibility?.[tabKey] !== false;
+};
+
+// 修改后：默认隐藏（除非设为 true）
+const isTabVisible = (tabKey: string): boolean => {
+  return menuVisibility?.[tabKey] === true;
+};
+```
+
+### 配置更新要点
+
+- 菜单项需同时更新三个位置：类型定义、Zod schema、配置文件
+- 使用 `.strict()` 模式防止未定义的配置项通过验证
+- UI 渲染逻辑需与 schema 验证规则保持一致
+- 修改默认行为前需评估对现有配置的影响
+
+### 配置同步检查
+
+```
+类型定义 (types.gateway.ts)
+    ↓
+Zod Schema (zod-schema.ts)
+    ↓
+配置文件 (configs/offline-bank.json)
+    ↓
+UI 渲染 (app-render.ts)
+```
+
+任一修改需同步更新其他位置，避免类型不匹配或验证失败。
