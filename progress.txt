@@ -1,76 +1,43 @@
 # OpenClaw 项目进展记录
 
-## 2026-03-20 - 项目初始化与可行性评估
-- 分析 OpenClaw 核心架构，评估内网删减版可行性（评分 8.5/10）
-- 生成最小化配置：`configs/offline-bank.json`
-- 创建跨平台部署脚本：Python 版本（`install-offline-windows.py`, `start-offline-windows.py`）
-- 调整本地 LLM 配置：使用 OpenAI 兼容接口（baseUrl: `http://127.0.0.1:8000/v1`）
-- Git 远端配置：调整为用户 fork `https://github.com/wonglaitung/openclaw_mini.git`
-
-## 2026-03-20 - 离线构建系统实现
-- 方案：构建时排除消息渠道和可选插件
-- 扩展 `optionalBundledClusters`：加入13个消息渠道 + 10个可选插件
-- 修改 `src/channels/plugins/bundled.ts`：实现异步条件导入
-- 创建离线构建脚本：Bash/PowerShell/Python 三版本
-- 构建结果：包体积从 152M 降至 36M（减少 76%），JS 文件从 3,563降至 785（减少 78%）
-- 提交：commit 31bf26ef9
+## 2026-03-20 - 项目初始化与离线构建
+- 内网删减版方案评估（评分 8.5/10）
+- 创建最小配置：`configs/offline-bank.json`
+- 离线构建脚本：Bash/PowerShell/Python 三版本
+- 构建优化：包体积 152M → 36M（减少 76%），JS 文件 3,563 → 785（减少 78%）
 
 ## 2026-03-22 - 文件系统访问控制
-- 添加 `allowedDirectories: string[]` 配置选项
-- 支持绝对路径和相对路径，优先于 `workspaceOnly`
-- 路径特性：自动规范化、子目录自动允许、防止部分匹配、跨平台兼容
-- 测试：18 个测试用例，全部通过
-- 文档：`docs/gateway/security/index.md`, `docs/gateway/configuration-examples.md`
-- 提交：commit a1812bc59
+- 添加 `allowedDirectories` 配置选项
+- 支持绝对/相对路径、子目录自动允许、跨平台兼容
+- 18 个测试用例全部通过
 
-## 2026-03-23 - Tool Access 菜单可见性过滤
-- 需求：当菜单被隐藏时，Tool Access 页面中对应的工具组也应该隐藏
-- 实现方案：添加菜单键到工具组 ID 的映射，根据 menuVisibility 过滤工具组
-- 修改文件：
-  - `ui/src/ui/views/agents-panels-tools-skills.ts`：实现过滤逻辑
-  - `ui/src/ui/views/agents.ts`：添加 menuVisibility 参数传递
-  - `ui/src/ui/app-render.ts`：传递 menuVisibility 数据
-- 菜单映射：
-  - channels → messaging
-  - automation → automation
-  - infrastructure → sessions（不包含 runtime）
-  - nodes → nodes
-- 提交：commit 44116fb26f
+## 2026-03-23 - Tool Access 菜单过滤
+- 实现菜单可见性与工具组的联动过滤
+- 菜单隐藏时，对应工具组也隐藏
 
-## 2026-03-23 - 工具配置优化：支持银行内网 Windows 系统
-- 工具白名单：`["bash", "read", "write", "edit", "apply_patch", "grep", "find", "ls"]`
-- 执行白名单：`["python", "python3", "node", "npm", "powershell", "pwsh", "cmd", "cmd.exe"]`
-- 安全模式：`tools.exec.security: "allowlist"`
-- 关键特性：
-  - 支持 PowerShell Core 7+（跨平台）
-  - 支持 Windows CMD（原生）
-  - 自动降级策略：PowerShell 7 → PowerShell 5.1 → cmd.exe
-  - WSL 路径转换：Windows 路径 → `/mnt/{drive}/{path}`
-- 配置文件：`configs/offline-bank.json`
+## 2026-03-23 - Windows 系统适配
+- 工具白名单：bash, read, write, edit, apply_patch, grep, find, ls
+- 执行白名单：python, python3, node, npm, powershell, pwsh, cmd, cmd.exe
+- PowerShell 自动降级策略：PS 7 → PS 5.1 → cmd.exe
+- WSL 路径转换：Windows 路径 → `/mnt/{drive}/{path}`
 
-## 2026-03-23 - 审计日志按日期滚动和表格展示
-- 修改 `src/logging/audit.ts`：支持按日期滚动日志
-- 新增功能：
-  - `getAuditLogFileName()` 函数生成带日期的日志文件名（如 `audit-2026-03-23.log`）
-  - `checkLogRotation()` 函数自动检测日期变化并轮换日志
-  - 日志目录从 `~/.openclaw/audit.log` 改为 `~/.openclaw/logs/audit.log`
-- 配置更新：
-  - `gateway.audit.file`: `"logs/audit.log"`
-  - `gateway.audit.rotateDaily`: `true`
-- 日志页面功能：
-  - 审计日志以表格形式展示，包含 Time、Type、Tool、Action、Status、Duration、Details 列
-  - 默认显示审计日志，可切换主日志
-  - 日期选择功能，支持查看不同日期的日志
-  - 智能提取操作详情（文件路径、命令、搜索模式等）
-- 提交：commit c2ab8afa3b
+## 2026-03-23 - 审计日志优化
+- 按日期滚动日志：`logs/audit-YYYY-MM-DD.log`
+- 表格展示：Time, Type, Tool, Action, Status, Duration, Details
+- 日期选择功能，智能提取操作详情
 
-## 2026-03-24 - 配置继承机制实现
-- 需求：`exec-approvals.json` 初始化时从 `tools.exec` 继承默认值
-- 实现方案：
-  - 修改 `loadExecApprovals()` 和 `ensureExecApprovals()`：添加 `toolsExec` 参数
-  - 添加 `resolveSecurityFromToolsExec()` 和 `resolveAskFromToolsExec()` 辅助函数
-  - 修改 `normalizeExecApprovals()`：当 `defaults` 为空时从 `tools.exec` 继承配置
-  - 更新所有调用点：gateway server-methods 和 node-host
-- 优先级：agent 覆盖 > `exec-approvals.json` defaults > `tools.exec` > 硬编码默认值
-- 测试验证：删除 `exec-approvals.json` 后，自动创建并正确继承配置
-- 提交：commit eb056e108e
+## 2026-03-24 - 配置继承机制
+- `exec-approvals.json` 从 `tools.exec` 继承默认值
+- 优先级：Agent 覆盖 > exec-approvals defaults > tools.exec > 硬编码默认值
+
+## 2026-03-24 - Gateway Token Reset
+- 添加 `config.resetToken` API 方法
+- UI 添加重置按钮（Overview 页面）
+- 修复配置路径问题（使用 `createConfigIO()`）
+- Windows 平台检测和路径处理
+- PowerShell 检测优化（使用 `spawnSync`）
+- UI 响应式布局（`flex-wrap`）
+
+## 2026-03-24 - 自定义版本号
+- 配置文件支持 `meta.version` 字段
+- UI 显示配置文件中的版本号（优先于运行时版本）
