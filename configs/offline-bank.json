@@ -25,7 +25,7 @@
             "name": "qwen3.5-plus",
             "api": "openai-completions",
             "reasoning": true,
-            "input": ["text"],
+            "input": ["text", "image"],
             "cost": {
               "input": 0,
               "output": 0,
