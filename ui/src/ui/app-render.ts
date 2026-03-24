@@ -490,7 +490,7 @@ export function renderApp(state: AppViewState) {
                   } | null;
                   const menuVisibility = config?.gateway?.controlUi?.menuVisibility;
                   const isTabVisible = (tabKey: string): boolean => {
-                    return menuVisibility?.[tabKey] !== false;
+                    return menuVisibility?.[tabKey] === true;
                   };
                   const filteredTabGroups = TAB_GROUPS.map((group) => ({
                     ...group,
@@ -545,7 +545,7 @@ export function renderApp(state: AppViewState) {
                     };
                   } | null;
                   const menuVisibility = config?.gateway?.controlUi?.menuVisibility;
-                  const docsVisible = menuVisibility?.docs !== false;
+                  const docsVisible = menuVisibility?.docs === true;
                   return docsVisible
                     ? html`
                         <a

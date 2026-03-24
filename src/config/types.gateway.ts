@@ -122,6 +122,10 @@ export type GatewayControlUiConfig = {
   hideChannels?: boolean;
   /** Control which menu items are visible in the UI. */
   menuVisibility?: {
+    chat?: boolean;
+    overview?: boolean;
+    usage?: boolean;
+    cron?: boolean;
     channels?: boolean;
     agents?: boolean;
     sessions?: boolean;
