@@ -945,6 +945,14 @@ export function attachGatewayWsMessageHandler(params: {
           snapshot.health = cachedHealth;
           snapshot.stateVersion.health = getHealthVersion();
         }
+
+        // Read version from config file, fallback to runtime version
+        const cfg = loadConfig();
+        const versionFromConfig = cfg.meta?.version;
+        const resolvedVersion = versionFromConfig
+          ? String(versionFromConfig)
+          : resolveRuntimeServiceVersion(process.env);
+
         const canvasCapability =
           role === "node" && canvasHostUrl ? mintCanvasCapabilityToken() : undefined;
         const canvasCapabilityExpiresAtMs = canvasCapability
@@ -958,7 +966,7 @@ export function attachGatewayWsMessageHandler(params: {
           type: "hello-ok",
           protocol: PROTOCOL_VERSION,
           server: {
-            version: resolveRuntimeServiceVersion(process.env),
+            version: resolvedVersion,
             connId,
           },
           features: { methods: gatewayMethods, events },
