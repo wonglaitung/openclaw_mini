@@ -2,7 +2,7 @@
   "meta": {
     "version": "0.1",
     "lastTouchedVersion": "2026.3.14",
-    "lastTouchedAt": "2026-03-24T14:14:42.543Z"
+    "lastTouchedAt": "2026-03-24T14:41:28.676Z"
   },
   "logging": {
     "level": "info"
@@ -59,7 +59,7 @@
         "model": {
           "primary": "local-openai/qwen3.5-plus"
         },
-        "skills": ["tencent_stock"],
+        "skills": ["tencent_stock", "pdf_reader"],
         "tools": {
           "allow": ["bash", "read", "write", "edit", "image", "apply_patch", "grep", "find", "ls"]
         }
