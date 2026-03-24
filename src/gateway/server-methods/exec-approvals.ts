@@ -1,3 +1,4 @@
+import { loadConfig } from "../../config/config.js";
 import {
   ensureExecApprovals,
   mergeExecApprovalsSocketDefaults,
@@ -100,7 +101,9 @@ export const execApprovalsHandlers: GatewayRequestHandlers = {
     if (!assertValidParams(params, validateExecApprovalsGetParams, "exec.approvals.get", respond)) {
       return;
     }
-    ensureExecApprovals();
+    const cfg = loadConfig();
+    const toolsExec = cfg.tools?.exec;
+    ensureExecApprovals(toolsExec);
     const snapshot = readExecApprovalsSnapshot();
     respond(true, toExecApprovalsPayload(snapshot), undefined);
   },
@@ -108,7 +111,9 @@ export const execApprovalsHandlers: GatewayRequestHandlers = {
     if (!assertValidParams(params, validateExecApprovalsSetParams, "exec.approvals.set", respond)) {
       return;
     }
-    ensureExecApprovals();
+    const cfg = loadConfig();
+    const toolsExec = cfg.tools?.exec;
+    ensureExecApprovals(toolsExec);
     const snapshot = readExecApprovalsSnapshot();
     if (!requireApprovalsBaseHash(params, snapshot, respond)) {
       return;
