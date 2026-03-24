@@ -1,6 +1,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { loadConfig } from "../config/config.js";
 import { GatewayClient } from "../gateway/client.js";
 import {
   ensureExecApprovals,
@@ -422,7 +423,9 @@ export async function handleInvoke(
   const command = String(frame.command ?? "");
   if (command === "system.execApprovals.get") {
     try {
-      ensureExecApprovals();
+      const cfg = loadConfig();
+      const toolsExec = cfg.tools?.exec;
+      ensureExecApprovals(toolsExec);
       const snapshot = readExecApprovalsSnapshot();
       const payload: ExecApprovalsSnapshot = {
         path: snapshot.path,
@@ -445,10 +448,12 @@ export async function handleInvoke(
       if (!params.file || typeof params.file !== "object") {
         throw new Error("INVALID_REQUEST: exec approvals file required");
       }
-      ensureExecApprovals();
+      const cfg = loadConfig();
+      const toolsExec = cfg.tools?.exec;
+      ensureExecApprovals(toolsExec);
       const snapshot = readExecApprovalsSnapshot();
       requireExecApprovalsBaseHash(params, snapshot);
-      const normalized = normalizeExecApprovals(params.file);
+      const normalized = normalizeExecApprovals(params.file, toolsExec);
       const next = mergeExecApprovalsSocketDefaults({ normalized, current: snapshot.file });
       saveExecApprovals(next);
       const nextSnapshot = readExecApprovalsSnapshot();

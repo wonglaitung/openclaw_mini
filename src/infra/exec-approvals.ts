@@ -256,7 +256,15 @@ function ensureAllowlistIds(
   return changed ? next : allowlist;
 }
 
-export function normalizeExecApprovals(file: ExecApprovalsFile): ExecApprovalsFile {
+export function normalizeExecApprovals(
+  file: ExecApprovalsFile,
+  toolsExec?: {
+    security?: string | null;
+    ask?: string | null;
+    askFallback?: string | null;
+    autoAllowSkills?: boolean | null;
+  },
+): ExecApprovalsFile {
   const socketPath = file.socket?.path?.trim();
   const token = file.socket?.token?.trim();
   const agents = { ...file.agents };
@@ -280,10 +288,11 @@ export function normalizeExecApprovals(file: ExecApprovalsFile): ExecApprovalsFi
       token: token && token.length > 0 ? token : undefined,
     },
     defaults: {
-      security: file.defaults?.security,
-      ask: file.defaults?.ask,
-      askFallback: file.defaults?.askFallback,
-      autoAllowSkills: file.defaults?.autoAllowSkills,
+      security: file.defaults?.security ?? resolveSecurityFromToolsExec(toolsExec?.security),
+      ask: file.defaults?.ask ?? resolveAskFromToolsExec(toolsExec?.ask),
+      askFallback:
+        file.defaults?.askFallback ?? resolveSecurityFromToolsExec(toolsExec?.askFallback),
+      autoAllowSkills: file.defaults?.autoAllowSkills ?? toolsExec?.autoAllowSkills ?? false,
     },
     agents,
   };
@@ -344,20 +353,25 @@ export function readExecApprovalsSnapshot(): ExecApprovalsSnapshot {
   };
 }
 
-export function loadExecApprovals(): ExecApprovalsFile {
+export function loadExecApprovals(toolsExec?: {
+  security?: string | null;
+  ask?: string | null;
+  askFallback?: string | null;
+  autoAllowSkills?: boolean | null;
+}): ExecApprovalsFile {
   const filePath = resolveExecApprovalsPath();
   try {
     if (!fs.existsSync(filePath)) {
-      return normalizeExecApprovals({ version: 1, agents: {} });
+      return normalizeExecApprovals({ version: 1, agents: {} }, toolsExec);
     }
     const raw = fs.readFileSync(filePath, "utf8");
     const parsed = JSON.parse(raw) as ExecApprovalsFile;
     if (parsed?.version !== 1) {
-      return normalizeExecApprovals({ version: 1, agents: {} });
+      return normalizeExecApprovals({ version: 1, agents: {} }, toolsExec);
     }
-    return normalizeExecApprovals(parsed);
+    return normalizeExecApprovals(parsed, toolsExec);
   } catch {
-    return normalizeExecApprovals({ version: 1, agents: {} });
+    return normalizeExecApprovals({ version: 1, agents: {} }, toolsExec);
   }
 }
 
@@ -372,9 +386,14 @@ export function saveExecApprovals(file: ExecApprovalsFile) {
   }
 }
 
-export function ensureExecApprovals(): ExecApprovalsFile {
-  const loaded = loadExecApprovals();
-  const next = normalizeExecApprovals(loaded);
+export function ensureExecApprovals(toolsExec?: {
+  security?: string | null;
+  ask?: string | null;
+  askFallback?: string | null;
+  autoAllowSkills?: boolean | null;
+}): ExecApprovalsFile {
+  const loaded = loadExecApprovals(toolsExec);
+  const next = normalizeExecApprovals(loaded, toolsExec);
   const socketPath = next.socket?.path?.trim();
   const token = next.socket?.token?.trim();
   const updated: ExecApprovalsFile = {
@@ -402,6 +421,20 @@ function normalizeAsk(value: ExecAsk | undefined, fallback: ExecAsk): ExecAsk {
   return fallback;
 }
 
+function resolveSecurityFromToolsExec(value: string | null | undefined): ExecSecurity {
+  if (value === "allowlist" || value === "full" || value === "deny") {
+    return value;
+  }
+  return DEFAULT_SECURITY;
+}
+
+function resolveAskFromToolsExec(value: string | null | undefined): ExecAsk {
+  if (value === "always" || value === "off" || value === "on-miss") {
+    return value;
+  }
+  return DEFAULT_ASK;
+}
+
 export type ExecApprovalsDefaultOverrides = {
   security?: ExecSecurity;
   ask?: ExecAsk;
@@ -412,8 +445,14 @@ export type ExecApprovalsDefaultOverrides = {
 export function resolveExecApprovals(
   agentId?: string,
   overrides?: ExecApprovalsDefaultOverrides,
+  toolsExec?: {
+    security?: string | null;
+    ask?: string | null;
+    askFallback?: string | null;
+    autoAllowSkills?: boolean | null;
+  },
 ): ExecApprovalsResolved {
-  const file = ensureExecApprovals();
+  const file = ensureExecApprovals(toolsExec);
   return resolveExecApprovalsFromFile({
     file,
     agentId,
