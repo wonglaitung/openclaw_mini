@@ -61,7 +61,7 @@
         },
         "skills": ["tencent_stock"],
         "tools": {
-          "allow": ["bash", "read", "write", "edit", "apply_patch", "grep", "find", "ls"]
+          "allow": ["bash", "read", "write", "edit", "image", "apply_patch", "grep", "find", "ls"]
         }
       }
     ]
