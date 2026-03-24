@@ -47,3 +47,13 @@
 - 添加 chat/overview/usage/cron 四个菜单项到配置 schema
 - 更新类型定义、Zod schema 和 UI 渲染逻辑
 - 离线银行配置启用基础功能菜单（chat/overview/usage/cron/agents/config/nodes/logs）
+
+## 2026-03-24 - PDF 读取技能开发
+- 创建 `pdf_reader` 技能：使用 Node.js 读取和解析 PDF 文件
+- 实现三个核心功能：
+  - `read_pdf.js`：提取 PDF 文本内容、元数据、支持加密 PDF
+  - `ocr_pdf.js`：OCR 文字识别（支持中英文），处理扫描型 PDF
+  - `extract_images.js`：提取 PDF 中的图片，支持 PNG/JPEG 格式
+- 依赖包：pdf-parse（文本提取）、tesseract.js（OCR）、pdfjs-dist（图片提取）
+- 完整的命令行参数支持和 JSON 输出格式
+- 删除 `tencent_stock` 技能

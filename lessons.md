@@ -167,3 +167,158 @@ UI 渲染 (app-render.ts)
 ```
 
 任一修改需同步更新其他位置，避免类型不匹配或验证失败。
+
+## 技能开发
+
+### 技能目录结构
+
+```
+skills/{skill_name}/
+├── SKILL.md              # 技能文档（YAML frontmatter + Markdown）
+└── scripts/
+    ├── package.json      # Node.js 依赖配置
+    ├── read_pdf.js       # 核心脚本
+    ├── ocr_pdf.js        # OCR 识别脚本
+    └── extract_images.js # 图片提取脚本
+```
+
+### 技能文档规范
+
+**SKILL.md 必须包含：**
+
+1. **YAML Frontmatter**
+
+   ```yaml
+   ---
+   name: skill_name
+   description: 技能描述
+   ---
+   ```
+
+2. **核心章节**
+   - Overview（概述）
+   - Quick Start（快速开始）
+   - Core Capabilities（核心功能）
+   - Usage（使用方法）
+   - Examples（示例）
+   - Notes（注意事项）
+   - Troubleshooting（故障排除）
+   - Dependencies（依赖说明）
+   - Resources（资源说明）
+
+### 依赖管理
+
+- 每个技能的 `scripts/` 目录独立管理依赖
+- 使用 `npm init -y` 初始化
+- 常用依赖：
+  - `pdf-parse`：PDF 文本提取
+  - `tesseract.js`：OCR 文字识别
+  - `pdfjs-dist`：高级 PDF 处理
+
+### 错误处理最佳实践
+
+```javascript
+// 依赖检查
+let pdfParse;
+try {
+  pdfParse = require("pdf-parse");
+} catch (error) {
+  console.error("错误: 缺少依赖");
+  console.error("请运行: npm install pdf-parse");
+  process.exit(1);
+}
+
+// 错误处理
+try {
+  const data = await readPDF(filePath);
+  // 处理数据
+} catch (error) {
+  console.error(`错误: ${error.message}`);
+  process.exit(1);
+}
+```
+
+### 命令行参数解析
+
+```javascript
+function parseArgs(args) {
+  const options = {
+    filePath: null,
+    page: null,
+    output: null,
+  };
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+
+    if (!arg.startsWith("--")) {
+      options.filePath = arg;
+      continue;
+    }
+
+    const [key, value] = arg.substring(2).split("=");
+    options[key] = value || args[++i];
+  }
+
+  return options;
+}
+```
+
+### 输出格式标准化
+
+**JSON 格式**：
+
+```json
+{
+  "success": true,
+  "metadata": {
+    "pages": 10,
+    "title": "Document Title"
+  },
+  "data": {
+    // 实际数据
+  }
+}
+```
+
+**错误格式**：
+
+```json
+{
+  "success": false,
+  "error": "错误描述"
+}
+```
+
+### OCR 实现要点
+
+1. **语言支持**
+   - 简体中文：`chi_sim`
+   - 繁体中文：`chi_tra`
+   - 英文：`eng`
+   - 混合：`chi_sim+eng`
+
+2. **性能优化**
+   - 按页面处理，避免内存溢出
+   - 使用进度条显示识别进度
+   - 保存中间结果
+
+3. **输出组织**
+   ```
+   ocr_output/
+   ├── page_1.png      # 渲染图片
+   ├── page_1.txt      # 识别文本
+   ├── page_2.png
+   ├── page_2.txt
+   └── ocr_summary.json # 汇总信息
+   ```
+
+### 技能测试检查清单
+
+- [ ] 依赖包正确安装
+- [ ] 无参数运行显示帮助信息
+- [ ] 文件不存在时给出清晰错误提示
+- [ ] 输出格式符合规范
+- [ ] 支持常用选项（--page, --output 等）
+- [ ] 错误处理完善
+- [ ] 文档完整且准确
