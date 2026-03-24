@@ -677,6 +677,10 @@ export const OpenClawSchema = z
             hideChannels: z.boolean().optional(),
             menuVisibility: z
               .object({
+                chat: z.boolean().optional(),
+                overview: z.boolean().optional(),
+                usage: z.boolean().optional(),
+                cron: z.boolean().optional(),
                 channels: z.boolean().optional(),
                 agents: z.boolean().optional(),
                 sessions: z.boolean().optional(),
