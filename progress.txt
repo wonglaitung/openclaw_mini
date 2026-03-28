@@ -57,3 +57,13 @@
 - 依赖包：pdf-parse（文本提取）、tesseract.js（OCR）、pdfjs-dist（图片提取）
 - 完整的命令行参数支持和 JSON 输出格式
 - 删除 `tencent_stock` 技能
+
+## 2026-03-28 - Bank Deployment 重构与优化
+- README 重写为 bank deployment 专用文档
+- 删除 skills.backup 目录（技能备份）
+- 删除客户端应用（apps/）- 870 个文件，129,103 行代码
+- 删除工具项目（Swabble/）- Swift 语音唤醒守护进程
+- 成功构建最小化版本（37M，76% 体积减少）
+- 修复 tool-display 文件对已删除 apps/shared 目录的引用
+- 服务成功重启并验证运行正常
+- 关键教训：删除扩展会导致构建失败，应使用环境变量控制而非物理删除

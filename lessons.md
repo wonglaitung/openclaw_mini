@@ -322,3 +322,259 @@ function parseArgs(args) {
 - [ ] 支持常用选项（--page, --output 等）
 - [ ] 错误处理完善
 - [ ] 文档完整且准确
+
+## Bank Deployment 重构经验
+
+### 代码依赖关系的复杂性
+
+**关键教训：**
+
+- 源代码中有大量对 `extensions/` 目录的引用
+- 物理删除扩展会导致 100+ 个构建错误
+- 简单的删除操作会破坏构建系统
+
+**解决方案：**
+
+- 使用环境变量控制功能包含：`OPENCLAW_INCLUDE_OPTIONAL_BUNDLED=0`
+- 使用构建配置文件控制：`OPENCLAW_BUILD_PROFILE=offline`
+- 保持代码完整性，通过配置而非删除来实现裁减
+
+### 安全删除的原则
+
+**可以安全删除的内容：**
+
+1. **独立项目**：与核心构建无关的独立项目
+   - `apps/` - 客户端应用（Android、iOS、macOS）
+   - `Swabble/` - 独立的 Swift 工具项目
+   - `skills.backup/` - 备份目录
+
+2. **构建产物**：可以随时重新生成
+   - `dist/` - 构建输出
+   - `dist-runtime/` - 迟行时构建产物
+
+3. **测试文件**：不影响运行（可选删除）
+   - `test/` - 测试代码
+   - `test-fixtures/` - 测试固件
+
+**不能删除的内容：**
+
+1. **核心源代码**：构建和运行必需
+   - `src/` - 核心 Gateway 代码
+   - `extensions/` - 扩展插件（代码中有大量引用）
+
+2. **配置和脚本**：构建和部署必需
+   - `scripts/` - 构建脚本
+   - `configs/` - 配置文件
+   - `package.json` - 依赖管理
+
+3. **依赖和工具**
+   - `node_modules/` - npm 依赖
+   - `vendor/` - 第三方依赖
+
+### 构建系统依赖分析
+
+**关键入口点：**
+
+- `tsdown.config.ts` - 定义构建入口点
+- `knip.config.ts` - 定义未使用代码检查
+- `src/plugin-sdk/` - 为扩展提供 SDK 接口
+
+**扩展 SDK 的作用：**
+
+- 为扩展提供统一的 API 接口
+- 处理扩展的加载、初始化和通信
+- 在 `src/` 中有大量对 `extensions/` 的导入
+
+**删除扩展的影响：**
+
+- 构建系统依赖扩展的存在
+- 删除扩展会导致 `tsdown.config.ts` 中的入口点解析失败
+- 删除扩展会导致 `knip.config.ts` 中的配置验证失败
+
+### 构建配置的正确方式
+
+**离线构建脚本（推荐）：**
+
+```bash
+# 设置环境变量
+export OPENCLAW_INCLUDE_OPTIONAL_BUNDLED=0
+export OPENCLAW_BUILD_PROFILE=offline
+
+# 运行构建
+pnpm build
+```
+
+**效果：**
+
+- 构建产物：37M（从 152M 减少 76%）
+- JS 文件：826 个（从 3,563 个减少 77%）
+- 不包含任何消息渠道
+- 不包含可选插件
+- 适合银行内网部署
+
+### 共享代码引用问题
+
+**问题：**
+
+- `src/agents/tool-display.ts` 和 `ui/src/ui/tool-display.ts` 都引用了 `apps/shared/OpenClawKit/Sources/OpenClawKit/Resources/tool-display.json`
+- 删除 `apps/` 后导致 UI 构建失败
+
+**解决方案：**
+
+1. 移除对 `apps/shared/` 的引用
+2. 改为使用 `src/agents/tool-display-overrides.json` 作为配置源
+3. 保持配置数据的完整性
+
+**修改示例：**
+
+```typescript
+// 修改前
+import SHARED_TOOL_DISPLAY_JSON from "../../../apps/shared/...";
+
+// 修改后
+import TOOL_DISPLAY_OVERRIDES_JSON from "../../../src/agents/tool-display-overrides.json";
+const SHARED_TOOL_DISPLAY_CONFIG = {} as ToolDisplayConfig;
+```
+
+### 大规模代码删除的风险评估
+
+**删除前的必要检查：**
+
+1. 搜索所有对该目录的引用
+2. 检查构建配置文件中的依赖
+3. 评估对测试的影响
+4. 确认不影响核心功能
+
+**验证方法：**
+
+```bash
+# 搜索引用
+grep -r "apps/" src/ --include="*.ts" --include="*.js" | head -20
+
+# 检查构建配置
+grep "extensions/" tsdown.config.ts knip.config.ts
+
+# 尝试构建
+pnpm build
+```
+
+### 回滚策略
+
+**Git 回滚命令：**
+
+```bash
+# 回退到指定提交
+git reset --hard <commit-hash>
+
+# 回退并保留更改
+git revert <commit-hash>
+```
+
+**经验教训：**
+
+- 删除前先提交当前工作
+- 保留回退选项
+- 小步骤验证（每次只删除一个目录）
+- 构建失败立即停止并分析原因
+
+### 项目精简的最佳实践
+
+**分层删除法：**
+
+1. 第一层：删除完全独立的项目（apps、Swabble）
+2. 第二层：删除可重新生成的产物（dist、dist-runtime）
+3. 第三层：删除不必要的文档和测试（docs/、test/、test-fixtures/）
+4. 第四层：根据需要删除扩展（需仔细评估依赖关系）
+
+**渐进式验证：**
+
+```bash
+# 删除一个目录 → 验证构建 → 提交
+rm -rf apps/
+pnpm build
+git commit -m "remove apps/"
+
+# 删除下一个目录 → 验证构建 → 提交
+rm -rf Swabble/
+pnpm build
+git commit -m "remove Swabble/"
+```
+
+### 离线构建的配置文件
+
+**environment variables（环境变量）：**
+
+```bash
+OPENCLAW_INCLUDE_OPTIONAL_BUNDLED=0  # 排除可选 bundles
+OPENCLAW_BUILD_PROFILE=offline          # 使用离线构建配置
+```
+
+**configs/offline-bank.json 关键配置：**
+
+```json
+{
+  "plugins": {
+    "enabled": true,
+    "allow": ["memory-core", "memory-lancedb"]
+  },
+  "gateway": {
+    "port": 18789,
+    "mode": "local",
+    "bind": "loopback",
+    "controlUi": {
+      "menuVisibility": {
+        "chat": true,
+        "overview": true,
+        "usage": true,
+        "cron": true,
+        "agents": true,
+        "config": true,
+        "nodes": true,
+        "logs": true
+      }
+    },
+    "auth": {
+      "mode": "token",
+      "token": "your-token-here"
+    },
+    "audit": {
+      "enabled": true,
+      "file": "logs/audit.log",
+      "level": "detailed",
+      "rotateDaily": true
+    }
+  },
+  "tools": {
+    "fs": {
+      "workspaceOnly": false,
+      "allowedDirectories": ["/home/user/shared-docs"]
+    },
+    "exec": {
+      "security": "allowlist",
+      "pathPrepend": ["scripts", "tools"],
+      "safeBins": ["python", "python3", "node", "npm", "powershell", "pwsh", "cmd", "cmd.exe"]
+    }
+  }
+}
+```
+
+### 构建产物验证
+
+**验证脚本：**
+
+```bash
+# 检查包大小
+du -sh dist/
+
+# 检查 JS 文件数量
+find dist/ -name "*.js" | wc -l
+
+# 检查是否包含不必要的文件
+find dist/ -name "*telegram*" -o -name "*whatsapp*" -o -name "*slack*"
+```
+
+**预期结果：**
+
+- 包大小：~37M
+- JS 文件数：~826
+- 不包含任何消息渠道相关的文件
