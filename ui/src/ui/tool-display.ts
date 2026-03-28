@@ -1,4 +1,3 @@
-import SHARED_TOOL_DISPLAY_JSON from "../../../apps/shared/OpenClawKit/Sources/OpenClawKit/Resources/tool-display.json" with { type: "json" };
 import {
   defaultTitle,
   formatToolDetailText,
@@ -6,6 +5,7 @@ import {
   resolveToolVerbAndDetailForArgs,
   type ToolDisplaySpec as ToolDisplaySpecBase,
 } from "../../../src/agents/tool-display-common.js";
+import TOOL_DISPLAY_OVERRIDES_JSON from "../../../src/agents/tool-display-overrides.json" with { type: "json" };
 import type { IconName } from "./icons.ts";
 
 type ToolDisplaySpec = ToolDisplaySpecBase & {
@@ -83,13 +83,13 @@ function convertSpec(spec?: SharedToolDisplaySpec): ToolDisplaySpec {
   };
 }
 
-const SHARED_TOOL_DISPLAY_CONFIG = SHARED_TOOL_DISPLAY_JSON as SharedToolDisplayConfig;
-const FALLBACK = convertSpec(SHARED_TOOL_DISPLAY_CONFIG.fallback ?? { emoji: "🧩" });
+const SHARED_TOOL_DISPLAY_CONFIG = {} as SharedToolDisplayConfig;
+const TOOL_DISPLAY_OVERRIDES = TOOL_DISPLAY_OVERRIDES_JSON as SharedToolDisplayConfig;
+const FALLBACK = convertSpec(TOOL_DISPLAY_OVERRIDES.fallback ?? { emoji: "🧩" });
 const TOOL_MAP: Record<string, ToolDisplaySpec> = Object.fromEntries(
-  Object.entries(SHARED_TOOL_DISPLAY_CONFIG.tools ?? {}).map(([key, spec]) => [
-    key,
-    convertSpec(spec),
-  ]),
+  Object.entries({ ...SHARED_TOOL_DISPLAY_CONFIG.tools, ...TOOL_DISPLAY_OVERRIDES.tools }).map(
+    ([key, spec]) => [key, convertSpec(spec)],
+  ),
 );
 TOOL_MAP.slack = SLACK_SPEC;
 
