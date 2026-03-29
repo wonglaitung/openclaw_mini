@@ -2,7 +2,7 @@
   "meta": {
     "version": "0.1",
     "lastTouchedVersion": "2026.3.14",
-    "lastTouchedAt": "2026-03-28T14:52:52.900Z"
+    "lastTouchedAt": "2026-03-28T15:15:37.350Z"
   },
   "logging": {
     "level": "info"
@@ -25,10 +25,7 @@
             "name": "qwen3.5-plus",
             "api": "openai-completions",
             "reasoning": true,
-            "input": [
-              "text",
-              "image"
-            ],
+            "input": ["text", "image"],
             "cost": {
               "input": 0,
               "output": 0,
@@ -62,22 +59,9 @@
         "model": {
           "primary": "local-openai/qwen3.5-plus"
         },
-        "skills": [
-          "tencent_stock",
-          "pdf_reader"
-        ],
+        "skills": ["tencent_stock", "pdf_reader"],
         "tools": {
-          "allow": [
-            "bash",
-            "read",
-            "write",
-            "edit",
-            "image",
-            "apply_patch",
-            "grep",
-            "find",
-            "ls"
-          ]
+          "allow": ["bash", "read", "write", "edit", "image", "apply_patch", "grep", "find", "ls"]
         }
       }
     ]
@@ -86,26 +70,12 @@
     "exec": {
       "security": "allowlist",
       "ask": "on-miss",
-      "pathPrepend": [
-        "scripts",
-        "tools"
-      ],
-      "safeBins": [
-        "python",
-        "python3",
-        "node",
-        "npm",
-        "powershell",
-        "pwsh",
-        "cmd",
-        "cmd.exe"
-      ]
+      "pathPrepend": ["scripts", "tools"],
+      "safeBins": ["python", "python3", "node", "npm", "powershell", "pwsh", "cmd", "cmd.exe"]
     },
     "fs": {
       "workspaceOnly": false,
-      "allowedDirectories": [
-        "/home/user/shared-docs"
-      ]
+      "allowedDirectories": ["/home/user/shared-docs"]
     }
   },
   "media": {
@@ -148,7 +118,7 @@
     },
     "auth": {
       "mode": "token",
-      "token": "3bc8bf7e02ac3db7046205745228ac007d5e3f8e7846d545"
+      "token": "43c679ef72ac8ca8f2e776573596743c49d99f7512acb14c"
     },
     "audit": {
       "enabled": true,
@@ -159,9 +129,6 @@
   },
   "plugins": {
     "enabled": true,
-    "allow": [
-      "memory-core",
-      "memory-lancedb"
-    ]
+    "allow": ["memory-core", "memory-lancedb"]
   }
 }
