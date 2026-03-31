@@ -578,3 +578,210 @@ find dist/ -name "*telegram*" -o -name "*whatsapp*" -o -name "*slack*"
 - 包大小：~37M
 - JS 文件数：~826
 - 不包含任何消息渠道相关的文件
+
+## A2UI Bundling 问题与解决
+
+### 问题背景
+
+**A2UI 的作用：**
+
+- Canvas tool display UI for mobile apps (Android/iOS)
+- 在 WebView 中显示工具 UI
+- 与 mobile apps 通过 WebSocket 通信
+
+**删除 apps/ 的影响：**
+
+- A2UI sources 位于 `apps/shared/OpenClawKit/Tools/CanvasA2UI/`
+- A2UI renderer 位于 `vendor/a2ui/renderers/lit/`
+- 删除 apps/ 后，缺少 A2UI sources
+- bundle-a2ui.sh 失败：缺少 sources 和 prebuilt bundle
+
+### 错误信息
+
+```bash
+A2UI sources missing and no prebuilt bundle found at: /data/openclaw_mini/src/canvas-host/a2ui/a2ui.bundle.js
+```
+
+### 构建流程分析
+
+**package.json build 脚本：**
+
+```json
+"build": "pnpm canvas:a2ui:bundle && node scripts/tsdown-build.mjs && ... && node --import tsx scripts/canvas-a2ui-copy.ts && ..."
+```
+
+**执行顺序：**
+
+1. `pnpm canvas:a2ui:bundle` → 调用 `scripts/bundle-a2ui.sh`
+2. `node scripts/tsdown-build.mjs` → TypeScript 构建
+3. `node --import tsx scripts/canvas-a2ui-copy.ts` → 复制 A2UI assets
+
+**问题：**
+
+- 步骤 1 失败，整个构建中止
+- `OPENCLAW_A2UI_SKIP_MISSING=1` 只在步骤 3 生效
+- 步骤 1 没有跳过机制
+
+### 解决方案
+
+**方案 1：修改 build 脚本（采用）**
+
+```json
+"build": "bash -c 'if [ \"$OPENCLAW_BUILD_PROFILE\" = \"offline\" ] || [ \"$OPENCLAW_A2UI_SKIP_MISSING\" = \"1\" ]; then echo \"Skipping A2UI bundle (offline build)\"; else pnpm canvas:a2ui:bundle; fi' && node scripts/tsdown-build.mjs && ... && node --import tsx scripts/canvas-a2ui-copy.ts && ..."
+```
+
+**原理：**
+
+- 检查环境变量 `OPENCLAW_BUILD_PROFILE` 或 `OPENCLAW_A2UI_SKIP_MISSING`
+- 如果为 offline 或 skip，跳过 `canvas:a2ui:bundle`
+- 继续执行后续构建步骤
+- `canvas-a2ui-copy.ts` 检测到 `OPENCLAW_A2UI_SKIP_MISSING=1` 时优雅跳过
+
+**方案 2：修改 bundle-a2ui.sh（备选）**
+
+```bash
+# 在 bundle-a2ui.sh 中添加跳过逻辑
+if [[ "${OPENCLAW_BUILD_PROFILE:-}" == "offline" ]] || [[ "${OPENCLAW_A2UI_SKIP_MISSING:-}" == "1" ]]; then
+  echo "Skipping A2UI bundle (offline build)"
+  exit 0
+fi
+```
+
+**方案 3：使用 build:docker 脚本（参考）**
+
+```json
+"build:docker": "node scripts/tsdown-build.mjs && node scripts/runtime-postbuild.mjs && node --import tsx scripts/canvas-a2ui-copy.ts && ..."
+```
+
+- Docker 构建已跳过 `canvas:a2ui:bundle`
+- 适用于 Docker 环境构建
+
+### 离线构建脚本更新
+
+**Bash (scripts/build-offline.sh)：**
+
+```bash
+export OPENCLAW_INCLUDE_OPTIONAL_BUNDLED=0
+export OPENCLAW_BUILD_PROFILE=offline
+export OPENCLAW_A2UI_SKIP_MISSING=1
+```
+
+**PowerShell (scripts/build-offline.ps1)：**
+
+```powershell
+$env:OPENCLAW_INCLUDE_OPTIONAL_BUNDLED = "0"
+$env:OPENCLAW_BUILD_PROFILE = "offline"
+$env:OPENCLAW_A2UI_SKIP_MISSING = "1"
+```
+
+**Python (scripts/build-offline.py)：**
+
+```python
+os.environ["OPENCLAW_INCLUDE_OPTIONAL_BUNDLED"] = "0"
+os.environ["OPENCLAW_BUILD_PROFILE"] = "offline"
+os.environ["OPENCLAW_A2UI_SKIP_MISSING"] = "1"
+```
+
+### 验证方法
+
+**直接运行构建：**
+
+```bash
+OPENCLAW_BUILD_PROFILE=offline OPENCLAW_A2UI_SKIP_MISSING=1 pnpm build
+```
+
+**运行离线构建脚本：**
+
+```bash
+bash scripts/build-offline.sh
+```
+
+**预期输出：**
+
+```
+Skipping A2UI bundle (offline build)
+...
+Missing A2UI bundle assets. Run "pnpm canvas:a2ui:bundle" and retry. Skipping copy (OPENCLAW_A2UI_SKIP_MISSING=1).
+...
+✅ 构建完成！
+```
+
+### 运行时行为
+
+**A2UI Handler (src/canvas-host/a2ui.ts)：**
+
+```typescript
+export async function handleA2uiHttpRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<boolean> {
+  const a2uiRootReal = await resolveA2uiRootReal();
+  if (!a2uiRootReal) {
+    res.statusCode = 503;
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.end("A2UI assets not found");
+    return true;
+  }
+  // ...
+}
+```
+
+**影响：**
+
+- 银行部署不使用 mobile apps
+- A2UI assets 不存在，返回 503
+- 不影响核心功能（聊天、agents、工具等）
+
+### 经验教训
+
+**1. 构建系统的脆弱性**
+
+- 简单的删除操作可能破坏构建链
+- 需要理解每个构建步骤的依赖关系
+
+**2. 环境变量的作用**
+
+- `OPENCLAW_BUILD_PROFILE`：控制构建行为（offline/docker/normal）
+- `OPENCLAW_INCLUDE_OPTIONAL_BUNDLED`：控制可选 bundles 的包含
+- `OPENCLAW_A2UI_SKIP_MISSING`：控制 A2UI 构建的跳过
+
+**3. 渐进式修改原则**
+
+- 一次只修改一个地方
+- 修改后立即验证
+- 保持回退选项
+
+**4. 文档的重要性**
+
+- 记录问题和解决方案
+- 更新 lessons.md 供未来参考
+- 避免重复踩坑
+
+### 相关文件清单
+
+**构建脚本：**
+
+- `package.json` - build 脚本定义
+- `scripts/bundle-a2ui.sh` - A2UI bundle 脚本
+- `scripts/canvas-a2ui-copy.ts` - A2UI assets 复制脚本
+- `scripts/build-offline.sh` - Bash 离线构建脚本
+- `scripts/build-offline.ps1` - PowerShell 离线构建脚本
+- `scripts/build-offline.py` - Python 离线构建脚本
+
+**源代码：**
+
+- `src/canvas-host/a2ui.ts` - A2UI HTTP handler
+- `src/canvas-host/a2ui/index.html` - A2UI HTML 模板
+
+**配置文件：**
+
+- `configs/offline-bank.json` - 离线银行部署配置
+
+### 测试检查清单
+
+- [ ] 离线构建成功（无错误）
+- [ ] 构建产物大小符合预期（~37M）
+- [ ] 服务启动正常
+- [ ] Gateway UI 可访问
+- [ ] 核心功能正常（聊天、agents、工具）
+- [ ] A2UI 请求返回 503（预期行为）

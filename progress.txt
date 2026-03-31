@@ -67,3 +67,12 @@
 - 修复 tool-display 文件对已删除 apps/shared 目录的引用
 - 服务成功重启并验证运行正常
 - 关键教训：删除扩展会导致构建失败，应使用环境变量控制而非物理删除
+
+## 2026-03-31 - A2UI Bundling 修复
+- 问题：删除 apps/ 后，A2UI 构建失败（缺少 sources 和 prebuilt bundle）
+- 解决方案：
+  - 修改 package.json build 脚本：条件跳过 canvas:a2ui:bundle（当 OPENCLAW_BUILD_PROFILE=offline 或 OPENCLAW_A2UI_SKIP_MISSING=1）
+  - 更新所有离线构建脚本：添加 OPENCLAW_A2UI_SKIP_MISSING=1 环境变量
+  - canvas-a2ui-copy.ts 已支持 OPENCLAW_A2UI_SKIP_MISSING=1，可优雅跳过
+- 原因：A2UI 用于 Canvas tool display in mobile apps，银行部署不需要
+- 构建成功：37M，无 A2UI assets，服务正常运行
