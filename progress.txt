@@ -76,3 +76,8 @@
   - canvas-a2ui-copy.ts 已支持 OPENCLAW_A2UI_SKIP_MISSING=1，可优雅跳过
 - 原因：A2UI 用于 Canvas tool display in mobile apps，银行部署不需要
 - 构建成功：37M，无 A2UI assets，服务正常运行
+
+## 2026-03-31 - UI 样式优化
+- 为 Overview 页面的 reset token 按钮添加红色背景（rgba(239, 68, 68, 0.2)）
+- 使用内联样式确保样式不受 CSS 层叠优先级影响
+- 提升危险操作的视觉可见性
