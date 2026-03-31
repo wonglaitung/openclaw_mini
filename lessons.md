@@ -777,6 +777,128 @@ export async function handleA2uiHttpRequest(
 
 - `configs/offline-bank.json` - 离线银行部署配置
 
+## UI 样式优化
+
+### 问题背景
+
+**需求：**
+
+- 为 Overview 页面的 reset token 按钮添加红色背景
+- 突出危险操作的重要性，提高用户警觉
+
+**初始方案：**
+
+1. 添加 `danger` CSS 类到按钮
+2. 使用现有的 `.btn.danger` 样式
+
+### 遇到的问题
+
+**问题 1：样式不可见**
+
+- `.btn.danger` 使用 `var(--danger-subtle)` CSS 变量
+- 该变量透明度只有 0.08，几乎看不见
+
+**问题 2：CSS 类覆盖**
+
+- 添加了 `.btn--icon.danger` 专用样式
+- 提高透明度到 0.2
+- 但样式仍然可能被其他 CSS 规则覆盖
+
+### 最终解决方案
+
+**使用内联样式：**
+
+```typescript
+<button
+  type="button"
+  class="btn btn--icon"
+  style="width: 36px; height: 36px; background: rgba(239, 68, 68, 0.2); color: #dc2626; border-color: transparent;"
+  title="Reset token"
+  aria-label="Reset token"
+  @click=${async () => {
+    if (window.confirm(
+      "Are you sure you want to reset the gateway token? This will invalidate all existing connections."
+    )) {
+      await props.onResetToken();
+    }
+  }}
+>
+  ${icons.refresh}
+</button>
+```
+
+**内联样式的优势：**
+
+1. **最高优先级**：内联样式不受 CSS 层叠规则影响
+2. **简单直接**：不需要修改 CSS 文件
+3. **可维护性**：样式定义在组件内部，易于理解
+4. **跨主题兼容**：不依赖 CSS 变量，适用于所有主题
+
+### 样式参数
+
+**背景色：**
+- `rgba(239, 68, 68, 0.2)` - 淡红色背景
+- RGB: (239, 68, 68)
+- 透明度: 0.2 (20%)
+
+**文字颜色：**
+- `#dc2626` - 深红色文字
+- 更深的红色，确保可读性
+
+**边框：**
+- `border-color: transparent` - 透明边框
+- 保持按钮简洁外观
+
+### 经验教训
+
+**1. CSS 变量的透明度陷阱**
+
+- `--danger-subtle` 透明度只有 0.08，过于淡
+- 需要检查 CSS 变量的实际值，不要假设
+- 对于危险操作，需要更明显的视觉提示
+
+**2. CSS 层叠的复杂性**
+
+- 添加新类可能被其他规则覆盖
+- 需要考虑 CSS 优先级和特异性
+- 内联样式可以避免这些复杂性
+
+**3. 渐进式调试方法**
+
+- 先添加 CSS 类，验证效果
+- 如果不可见，检查 CSS 变量值
+- 如果被覆盖，提高特异性或使用内联样式
+- 每次修改后立即验证
+
+**4. 删除不必要的修改**
+
+- 一旦找到有效方案，删除所有尝试性修改
+- 保持代码简洁，避免冗余
+- 使用 `git reset --soft` 回退中间提交
+- 只保留最终的解决方案
+
+**5. Git 工作流的重要性**
+
+```bash
+# 回退到有效提交之前
+git reset --soft <commit-hash>
+
+# 清理所有中间修改
+git restore <files>
+
+# 只保留最终方案
+git add <final-files>
+git commit -m "final solution"
+```
+
+### 相关文件
+
+**源代码：**
+- `ui/src/ui/views/overview.ts` - Overview 页面组件
+
+**样式文件：**
+- `ui/src/styles/components.css` - CSS 组件样式
+
 ### 测试检查清单
 
 - [ ] 离线构建成功（无错误）
