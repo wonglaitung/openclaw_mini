@@ -10,10 +10,12 @@ echo ""
 # 设置环境变量
 export OPENCLAW_INCLUDE_OPTIONAL_BUNDLED=0
 export OPENCLAW_BUILD_PROFILE=offline
+export OPENCLAW_A2UI_SKIP_MISSING=1
 
 echo "📋 构建配置："
 echo "  - OPENCLAW_INCLUDE_OPTIONAL_BUNDLED=0"
 echo "  - OPENCLAW_BUILD_PROFILE=offline"
+echo "  - OPENCLAW_A2UI_SKIP_MISSING=1"
 echo ""
 
 # 清理旧的构建产物

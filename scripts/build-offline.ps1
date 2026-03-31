@@ -9,10 +9,12 @@ Write-Host ""
 # 设置环境变量
 $env:OPENCLAW_INCLUDE_OPTIONAL_BUNDLED = "0"
 $env:OPENCLAW_BUILD_PROFILE = "offline"
+$env:OPENCLAW_A2UI_SKIP_MISSING = "1"
 
 Write-Host "📋 构建配置：" -ForegroundColor Cyan
 Write-Host "  - OPENCLAW_INCLUDE_OPTIONAL_BUNDLED=0"
 Write-Host "  - OPENCLAW_BUILD_PROFILE=offline"
+Write-Host "  - OPENCLAW_A2UI_SKIP_MISSING=1"
 Write-Host ""
 
 # 清理旧的构建产物
