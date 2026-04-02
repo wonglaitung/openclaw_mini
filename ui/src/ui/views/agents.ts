@@ -527,6 +527,7 @@ function renderAgentFilesystem(props: {
                           ?disabled=${!editable}
                           placeholder="/path/to/directory"
                           autocomplete="off"
+                          style="width: 80%;"
                         />
                         ${
                           editable

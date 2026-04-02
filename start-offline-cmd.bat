@@ -1,0 +1,1 @@
+set OPENCLAW_CONFIG_PATH=configs/offline-bank.json & node openclaw.mjs gateway run --port 18789

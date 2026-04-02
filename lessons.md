@@ -480,3 +480,444 @@ git commit -m "final solution"
 - [ ] Gateway UI 可访问
 - [ ] 核心功能正常（聊天、agents、工具）
 - [ ] A2UI 请求返回 503（预期行为）
+
+## 跨平台路径处理
+
+### Windows vs WSL 的路径差异
+
+**问题背景：**
+
+- 代码中假设系统在 WSL（Windows Subsystem for Linux）中运行
+- 实际系统可能是原生 Windows
+- 路径转换逻辑错误导致权限验证失败
+
+**错误代码示例：**
+
+```typescript
+// 错误：总是将 Windows 路径转换为 WSL 格式
+if (/^[A-Za-z]:[\\/]/.test(filePath)) {
+  const drive = filePath[0].toLowerCase();
+  const restPath = filePath.substring(2).replace(/\\/g, "/");
+  resolvedPath = `/mnt/${drive}/${restPath}`;
+}
+```
+
+**正确代码示例：**
+
+```typescript
+// 正确：根据平台选择路径处理方式
+const isWindows = process.platform === "win32";
+
+if (isWindows) {
+  // Windows 平台，直接使用 Windows 路径
+  resolvedPath = path.resolve(filePath);
+} else {
+  // WSL/Unix 平台，转换 Windows 路径
+  if (/^[A-Za-z]:[\\/]/.test(filePath)) {
+    const drive = filePath[0].toLowerCase();
+    const restPath = filePath.substring(2).replace(/\\/g, "/");
+    resolvedPath = `/mnt/${drive}/${restPath}`;
+  } else {
+    resolvedPath = path.resolve(filePath);
+  }
+}
+```
+
+### 平台检测的重要性
+
+**关键原则：**
+
+1. **使用 `process.platform` 而非路径特征判断**
+   - `process.platform === "win32"` - 原生 Windows
+   - `process.platform === "linux"` - Linux 或 WSL
+   - `process.platform === "darwin"` - macOS
+
+2. **路径特征只能作为辅助验证**
+   - `/^[A-Za-z]:[\\/]/.test(path)` - Windows 绝对路径
+   - `/^\/mnt\//.test(path)` - WSL 挂载点
+   - 这些特征不能可靠区分平台
+
+### 路径规范化的最佳实践
+
+**跨平台路径处理流程：**
+
+```typescript
+import path from "node:path";
+import os from "node:os";
+
+// 1. 解析为绝对路径
+const absolutePath = path.resolve(inputPath);
+
+// 2. 规范化路径（统一分隔符、解析 .. 和 .）
+const normalizedPath = path.normalize(absolutePath);
+
+// 3. 根据平台进行处理
+if (process.platform === "win32") {
+  // Windows: 使用反斜杠，但 path.normalize() 会处理
+  // 直接比较即可
+} else {
+  // Linux/macOS/WSL: 使用正斜杠
+  // 如果遇到 Windows 路径，需要转换
+  if (/^[A-Za-z]:[\\/]/.test(inputPath)) {
+    // Windows 路径 → WSL 路径
+    const drive = inputPath[0].toLowerCase();
+    const restPath = inputPath.substring(2).replace(/\\/g, "/");
+    resolvedPath = `/mnt/${drive}/${restPath}`;
+  }
+}
+```
+
+### 路径比较的注意事项
+
+**常见陷阱：**
+
+1. **混合路径分隔符**
+   - Windows: `C:\Users\file.txt` vs `C:/Users/file.txt`
+   - 解决：使用 `path.normalize()` 统一
+
+2. **大小写敏感**
+   - Windows: 不区分大小写
+   - Linux/macOS: 区分大小写
+   - 解决：比较前统一大小写或使用平台特定的比较方法
+
+3. **符号链接和硬链接**
+   - 需要解析真实路径
+   - 使用 `fs.realpathSync()` 解析
+
+**正确比较示例：**
+
+```typescript
+function pathsEqual(path1: string, path2: string): boolean {
+  const norm1 = path.normalize(path.resolve(path1));
+  const norm2 = path.normalize(path.resolve(path2));
+
+  if (process.platform === "win32") {
+    return norm1.toLowerCase() === norm2.toLowerCase();
+  }
+  return norm1 === norm2;
+}
+
+function isSubdirectory(parent: string, child: string): boolean {
+  const normParent = path.normalize(path.resolve(parent));
+  const normChild = path.normalize(path.resolve(child));
+
+  if (process.platform === "win32") {
+    normParent = normParent.toLowerCase();
+    normChild = normChild.toLowerCase();
+  }
+
+  // 确保父路径以分隔符结尾
+  const parentWithSep = normParent.endsWith(path.sep)
+    ? normParent
+    : normParent + path.sep;
+
+  return normChild.startsWith(parentWithSep);
+}
+```
+
+## 预设目录豁免机制
+
+### 设计原则
+
+**为什么需要预设目录豁免：**
+
+1. **系统必需目录**
+   - OpenClaw 的配置和状态目录
+   - 用户数据存储目录
+   - 临时文件目录
+
+2. **用户体验考虑**
+   - 不需要手动配置常用目录
+   - 避免因配置错误导致功能失效
+   - 降低使用门槛
+
+3. **安全性考虑**
+   - 预设目录通常是安全的
+   - 限制在用户主目录下
+   - 避免暴露系统敏感目录
+
+### 实现方法
+
+**在路径验证前检查：**
+
+```typescript
+export function isPathInAllowedDirectories(
+  targetPath: string,
+  allowedDirectories: string[],
+): boolean {
+  const path = require("path") as typeof import("path");
+  const os = require("os") as typeof import("os");
+
+  // 1. 规范化目标路径
+  const normalizedTarget = path.normalize(path.resolve(targetPath));
+
+  // 2. 检查预设豁免目录（最高优先级）
+  const openclawDirBase = path.join(os.homedir(), ".openclaw");
+  const normalizedOpenclawDir = path.normalize(path.resolve(openclawDirBase));
+
+  if (normalizedTarget === normalizedOpenclawDir ||
+      normalizedTarget.startsWith(normalizedOpenclawDir + path.sep)) {
+    return true; // 总是允许访问
+  }
+
+  // 3. 检查用户配置的允许目录
+  return allowedDirectories.some((allowedDir) => {
+    const normalizedAllowed = path.normalize(path.resolve(allowedDir));
+    return normalizedTarget === normalizedAllowed ||
+           normalizedTarget.startsWith(normalized + path.sep);
+  });
+}
+```
+
+### 豁免目录的选择
+
+**应豁免的目录：**
+
+1. **OpenClaw 自身目录**
+   - `~/.openclaw/` - 配置、状态、日志
+   - `~/.openclaw/workspace/` - 工作区文件
+   - `~/.openclaw/sessions/` - 会话记录
+   - `~/.openclaw/agents/` - Agent 配置
+
+2. **用户数据目录**
+   - `~/Documents/` - 用户文档（可选）
+   - `~/Desktop/` - 桌面文件（可选）
+   - `~/Downloads/` - 下载文件（可选）
+
+3. **临时目录**
+   - `~/.openclaw/tmp/` - 临时文件
+   - `os.tmpdir()` - 系统临时目录（谨慎）
+
+**不应豁免的目录：**
+
+1. **系统目录**
+   - `C:\Windows\` - Windows 系统目录
+   - `/etc/` - Linux 配置目录
+   - `/root/` - 超级用户目录
+
+2. **其他用户目录**
+   - `/home/otheruser/` - 其他用户的家目录
+   - `C:\Users\OtherUser\` - 其他用户目录
+
+3. **敏感目录**
+   - `~/.ssh/` - SSH 密钥（除非需要）
+   - `~/.aws/` - AWS 凭证（除非需要）
+   - `/var/log/` - 系统日志
+
+### 配置文件中的提示
+
+**在配置文件中添加注释说明：**
+
+```json
+{
+  "tools": {
+    "fs": {
+      "workspaceOnly": false,
+      "allowedDirectories": [
+        "C:\\Users\\gyyz-laitungwong\\My Projects\\AIAgentLab\\openclaw_mini",
+        "C:\\Users\\gyyz-laitungwong\\Documents",
+        "C:\\Users\\gyyz-laitungwong\\Desktop"
+      ],
+      "_comment": "Note: ~/.openclaw directory is always allowed, no need to add it here"
+    }
+  }
+}
+```
+
+**在 UI 中显示提示：**
+
+```html
+<div class="callout info" style="margin-top: 8px">
+  <strong>Note:</strong> The OpenClaw workspace directory (~/.openclaw) is always allowed
+  and does not need to be added to the allowed directories list.
+</div>
+```
+
+## 调试日志的最佳实践
+
+### 使用结构化日志系统
+
+**问题：直接使用 console.log**
+
+```typescript
+// 不推荐：直接使用 console.log
+console.log(`[read tool] Path validation:`, {
+  filePath,
+  resolvedPath,
+  allowedDirectories: options.allowedDirectories,
+  platform: process.platform,
+  isWindows
+});
+```
+
+**推荐：使用 createSubsystemLogger**
+
+```typescript
+// 推荐：使用结构化日志系统
+import { createSubsystemLogger } from "../logging/subsystem.js";
+
+const log = createSubsystemLogger("agents/pi-tools-read");
+
+log.debug(`[read tool] Path validation:`, {
+  filePath,
+  resolvedPath,
+  allowedDirectories: options.allowedDirectories,
+  platform: process.platform,
+  isWindows
+});
+```
+
+### 日志级别的使用
+
+**日志级别指南：**
+
+| 级别 | 用途 | 示例 |
+|------|------|------|
+| `debug` | 详细的调试信息 | 路径解析过程、参数验证 |
+| `info` | 一般信息 | 功能启用/禁用、配置加载 |
+| `warn` | 警告信息 | 配置错误、兼容性问题 |
+| `error` | 错误信息 | 权限拒绝、文件不存在 |
+
+**示例：**
+
+```typescript
+// Debug: 详细过程
+log.debug(`Path validation details:`, {
+  input: filePath,
+  normalized: resolvedPath,
+  allowed: allowedDirectories,
+  result: isAllowed
+});
+
+// Info: 重要状态
+log.info(`Allowed directories configured: ${allowedDirectories.length}`);
+
+// Warn: 配置问题
+log.warn(`Allowed directory does not exist: ${dir}`);
+
+// Error: 权限问题
+log.error(`Access denied to path: ${filePath}`);
+```
+
+### 日志的上下文信息
+
+**包含关键上下文：**
+
+```typescript
+log.debug(`Path validation`, {
+  // 输入参数
+  filePath,
+  allowedDirectories,
+
+  // 处理过程
+  resolvedPath,
+  normalizedTarget,
+  normalizedAllowed,
+
+  // 环境信息
+  platform: process.platform,
+  isWindows: process.platform === "win32",
+  homedir: os.homedir(),
+
+  // 结果
+  isAllowed,
+  reason: isAllowed ? "in allowed list" : "not in allowed list"
+});
+```
+
+### 条件日志
+
+**避免生产环境的性能影响：**
+
+```typescript
+// 不推荐：总是构建日志对象
+log.debug(`Debug info: ${JSON.stringify(expensiveComputation())}`);
+
+// 推荐：先检查日志级别
+if (log.isDebugEnabled()) {
+  const details = expensiveComputation();
+  log.debug(`Debug info:`, details);
+}
+```
+
+### 日志与错误处理
+
+**在错误消息中包含调试信息：**
+
+```typescript
+try {
+  const isAllowed = isPathInAllowedDirectories(resolvedPath, allowedDirectories);
+  log.debug(`Path validation result:`, {
+    path: filePath,
+    resolved: resolvedPath,
+    allowed: isAllowed
+  });
+
+  if (!isAllowed) {
+    log.error(`Access denied: ${filePath}`, {
+      resolvedPath,
+      allowedDirectories,
+      platform: process.platform
+    });
+    throw createFsAccessError("EACCES", filePath);
+  }
+} catch (error) {
+  log.error(`Path validation failed:`, {
+    error: error instanceof Error ? error.message : String(error),
+    stack: error instanceof Error ? error.stack : undefined,
+    filePath,
+    allowedDirectories
+  });
+  throw error;
+}
+```
+
+### UI 输入框样式优化
+
+### 问题
+
+**Allowed Directories 输入框太短，难以输入长路径**
+
+### 解决方案
+
+**使用百分比宽度：**
+
+```typescript
+<input
+  class="field mono"
+  .value=${dir}
+  @input=${(e: Event) => updateDirectory(index, (e.target as HTMLInputElement).value)}
+  ?disabled=${!editable}
+  placeholder="/path/to/directory"
+  autocomplete="off"
+  style="width: 80%;"  // 添加宽度样式
+/>
+```
+
+**优势：**
+
+1. **响应式设计**：自动适应页面宽度
+2. **易于维护**：不需要硬编码像素值
+3. **用户友好**：足够的空间输入长路径
+
+### 进一步优化建议
+
+**考虑其他布局选项：**
+
+1. **全宽输入框**：`width: 100%`
+2. **flex 布局**：自动填充剩余空间
+3. **可调整大小**：添加 resize 功能
+
+**示例：使用 flex 布局**
+
+```html
+<div style="display: flex; gap: 8px; align-items: center;">
+  <input
+    class="field mono"
+    style="flex: 1; min-width: 0;"
+    .value=${dir}
+    @input=${...}
+  />
+  <button class="btn btn--sm" @click=${...}>✕</button>
+</div>
+```
