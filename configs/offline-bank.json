@@ -2,7 +2,7 @@
   "meta": {
     "version": "0.1",
     "lastTouchedVersion": "2026.3.14",
-    "lastTouchedAt": "2026-03-28T15:15:37.350Z"
+    "lastTouchedAt": "2026-04-02T06:46:47.472Z"
   },
   "logging": {
     "level": "info"
@@ -25,7 +25,10 @@
             "name": "qwen3.5-plus",
             "api": "openai-completions",
             "reasoning": true,
-            "input": ["text", "image"],
+            "input": [
+              "text",
+              "image"
+            ],
             "cost": {
               "input": 0,
               "output": 0,
@@ -59,9 +62,17 @@
         "model": {
           "primary": "local-openai/qwen3.5-plus"
         },
-        "skills": ["tencent_stock", "pdf_reader"],
+        "skills": [
+          "tencent_stock",
+          "pdf_reader"
+        ],
         "tools": {
-          "allow": ["bash", "read", "write", "edit", "image", "apply_patch", "grep", "find", "ls"]
+          "allow": [
+            "bash",
+            "read",
+            "write",
+            "edit"
+          ]
         }
       }
     ]
@@ -70,12 +81,28 @@
     "exec": {
       "security": "allowlist",
       "ask": "on-miss",
-      "pathPrepend": ["scripts", "tools"],
-      "safeBins": ["python", "python3", "node", "npm", "powershell", "pwsh", "cmd", "cmd.exe"]
+      "pathPrepend": [
+        "scripts",
+        "tools"
+      ],
+      "safeBins": [
+        "python",
+        "python3",
+        "node",
+        "npm",
+        "powershell",
+        "pwsh",
+        "cmd",
+        "cmd.exe"
+      ]
     },
     "fs": {
       "workspaceOnly": false,
-      "allowedDirectories": ["/home/user/shared-docs"]
+      "allowedDirectories": [
+        "C:\\Users\\gyyz-laitungwong\\My Projects\\AIAgentLab\\openclaw_mini",
+        "C:\\Users\\gyyz-laitungwong\\Documents",
+        "C:\\Users\\gyyz-laitungwong\\Desktop"
+      ]
     }
   },
   "media": {
@@ -129,6 +156,9 @@
   },
   "plugins": {
     "enabled": true,
-    "allow": ["memory-core", "memory-lancedb"]
+    "allow": [
+      "memory-core",
+      "memory-lancedb"
+    ]
   }
 }

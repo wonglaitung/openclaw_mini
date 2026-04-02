@@ -81,3 +81,13 @@
 - 为 Overview 页面的 reset token 按钮添加红色背景（rgba(239, 68, 68, 0.2)）
 - 使用内联样式确保样式不受 CSS 层叠优先级影响
 - 提升危险操作的视觉可见性
+
+## 2026-04-02 - 文件系统权限修复与优化
+- 修复工具允许列表配置：移除不存在的工具（grep, find, ls）和可能不可用的工具（image, apply_patch）
+- 修复文件系统允许目录配置：将 Linux 路径格式（/home/user/shared-docs）改为 Windows 路径格式
+- 修复 Windows 平台路径验证逻辑：`pi-tools.read.ts` 中的 `createOpenClawReadTool` 函数假设系统在 WSL 中运行，实际上在原生 Windows 上运行
+- 添加平台检测逻辑：在 Windows 上直接使用 Windows 路径进行比较，不转换到 WSL 格式
+- 添加调试日志：使用 `createSubsystemLogger` 记录路径验证过程
+- UI 优化：Allowed Directories 输入框宽度设置为页面的 80%
+- 添加 OpenClaw 预设工作目录豁免：`~/.openclaw` 目录总是允许访问，不受 `allowedDirectories` 限制影响
+- 支持跨平台：Windows（C:\Users\username\.openclaw）、Linux（/home/username/.openclaw）、macOS（/Users/username/.openclaw）

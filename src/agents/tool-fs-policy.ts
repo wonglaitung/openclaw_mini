@@ -75,6 +75,7 @@ export function isPathInAllowedDirectories(
   allowedDirectories: string[],
 ): boolean {
   const path = require("path") as typeof import("path");
+  const os = require("os") as typeof import("os");
   const isWindows = process.platform === "win32";
 
   let normalizedTarget: string;
@@ -92,6 +93,17 @@ export function isPathInAllowedDirectories(
     } else {
       normalizedTarget = path.normalize(path.resolve(targetPath));
     }
+  }
+
+  // 总是允许访问 OpenClaw 的预设工作目录
+  // Windows: C:\Users\<username>\.openclaw
+  // Linux/macOS: /home/<username>/.openclaw 或 /Users/<username>/.openclaw
+  const openclawDirBase = path.join(os.homedir(), ".openclaw");
+  const normalizedOpenclawDir = path.normalize(path.resolve(openclawDirBase));
+  
+  if (normalizedTarget === normalizedOpenclawDir ||
+      normalizedTarget.startsWith(normalizedOpenclawDir + path.sep)) {
+    return true;
   }
 
   return allowedDirectories.some((allowedDir) => {
