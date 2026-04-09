@@ -10,6 +10,7 @@ import {
   readFileWithinRoot,
   writeFileWithinRoot,
 } from "../infra/fs-safe.js";
+import { createSubsystemLogger } from "../logging/subsystem.js";
 import { detectMime } from "../media/mime.js";
 import { sniffMimeFromBase64 } from "../media/sniff-mime-from-base64.js";
 import type { ImageSanitizationLimits } from "./image-sanitization.js";
@@ -27,6 +28,8 @@ import { assertSandboxPath } from "./sandbox-paths.js";
 import type { SandboxFsBridge } from "./sandbox/fs-bridge.js";
 import { isPathInAllowedDirectories } from "./tool-fs-policy.js";
 import { sanitizeToolResultImages } from "./tool-images.js";
+
+const log = createSubsystemLogger("agents/pi-tools-read");
 
 export {
   CLAUDE_PARAM_GROUPS,
@@ -663,18 +666,38 @@ export function createOpenClawReadTool(
       // Validate path against allowedDirectories if configured
       const filePath = typeof record?.path === "string" ? String(record?.path) : "";
       if (filePath && options?.allowedDirectories && options.allowedDirectories.length > 0) {
-        // Handle Windows paths in WSL (e.g., D:\Movies -> /mnt/d/Movies)
-        let resolvedPath = filePath;
-        if (/^[A-Za-z]:[\\/]/.test(filePath)) {
-          // Windows absolute path
-          const drive = filePath[0].toLowerCase();
-          const restPath = filePath.substring(2).replace(/\\/g, "/");
-          resolvedPath = `/mnt/${drive}/${restPath}`;
-        } else {
+        // On Windows, use Windows paths directly for comparison
+        // On WSL/Unix, convert Windows paths to WSL format
+        let resolvedPath: string;
+        const isWindows = process.platform === "win32";
+        
+        if (isWindows) {
+          // On native Windows, just normalize the path
           resolvedPath = path.resolve(filePath);
+        } else {
+          // On Unix/WSL, handle Windows paths by converting to WSL format
+          if (/^[A-Za-z]:[\\/]/.test(filePath)) {
+            // Windows absolute path
+            const drive = filePath[0].toLowerCase();
+            const restPath = filePath.substring(2).replace(/\\/g, "/");
+            resolvedPath = `/mnt/${drive}/${restPath}`;
+          } else {
+            resolvedPath = path.resolve(filePath);
+          }
         }
 
+        // Debug logging
+        log.debug(`[read tool] Path validation:`, {
+          filePath,
+          resolvedPath,
+          allowedDirectories: options.allowedDirectories,
+          platform: process.platform,
+          isWindows
+        });
+
         const isAllowed = isPathInAllowedDirectories(resolvedPath, options.allowedDirectories);
+        log.debug(`[read tool] Path allowed: ${isAllowed}`);
+        
         if (!isAllowed) {
           throw createFsAccessError("EACCES", filePath);
         }

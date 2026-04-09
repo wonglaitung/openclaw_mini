@@ -3,6 +3,33 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { removePathIfExists } from "./runtime-postbuild-shared.mjs";
 
+function copyDirectoryRecursive(source, target) {
+  // Create target directory if it doesn't exist
+  if (!fs.existsSync(target)) {
+    fs.mkdirSync(target, { recursive: true });
+  }
+
+  // Read source directory
+  const entries = fs.readdirSync(source, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const sourcePath = path.join(source, entry.name);
+    const targetPath = path.join(target, entry.name);
+
+    if (entry.isDirectory()) {
+      // Recursively copy subdirectories
+      copyDirectoryRecursive(sourcePath, targetPath);
+    } else if (entry.isSymbolicLink()) {
+      // Copy symbolic links
+      const linkTarget = fs.readlinkSync(sourcePath);
+      fs.symlinkSync(linkTarget, targetPath);
+    } else {
+      // Copy files
+      fs.copyFileSync(sourcePath, targetPath);
+    }
+  }
+}
+
 function symlinkType() {
   return process.platform === "win32" ? "junction" : "dir";
 }
@@ -13,7 +40,21 @@ function relativeSymlinkTarget(sourcePath, targetPath) {
 }
 
 function symlinkPath(sourcePath, targetPath, type) {
-  fs.symlinkSync(relativeSymlinkTarget(sourcePath, targetPath), targetPath, type);
+  // On Windows, use hard links to avoid permission issues with symbolic links
+  if (process.platform === "win32") {
+    try {
+      fs.linkSync(sourcePath, targetPath);
+    } catch (error) {
+      // If hard link fails (e.g., cross-device), fall back to copy
+      if (error.code === 'EXDEV' || error.code === 'EPERM') {
+        fs.copyFileSync(sourcePath, targetPath);
+      } else {
+        throw error;
+      }
+    }
+  } else {
+    fs.symlinkSync(relativeSymlinkTarget(sourcePath, targetPath), targetPath, type);
+  }
 }
 
 function shouldWrapRuntimeJsFile(sourcePath) {
@@ -91,7 +132,23 @@ function linkPluginNodeModules(params) {
   if (!fs.existsSync(params.sourcePluginNodeModulesDir)) {
     return;
   }
-  fs.symlinkSync(params.sourcePluginNodeModulesDir, runtimeNodeModulesDir, symlinkType());
+
+  // On Windows, use junctions or directory copy instead of symbolic links
+  if (process.platform === "win32") {
+    try {
+      // Try junction first (works on Windows)
+      fs.symlinkSync(params.sourcePluginNodeModulesDir, runtimeNodeModulesDir, "junction");
+    } catch (error) {
+      // If junction fails, copy the directory recursively
+      if (error.code === 'EPERM' || error.code === 'ENOENT') {
+        copyDirectoryRecursive(params.sourcePluginNodeModulesDir, runtimeNodeModulesDir);
+      } else {
+        throw error;
+      }
+    }
+  } else {
+    fs.symlinkSync(params.sourcePluginNodeModulesDir, runtimeNodeModulesDir, symlinkType());
+  }
 }
 
 export function stageBundledPluginRuntime(params = {}) {

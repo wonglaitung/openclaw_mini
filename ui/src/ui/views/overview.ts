@@ -248,7 +248,7 @@ export function renderOverview(props: OverviewProps) {
                     <button
                       type="button"
                       class="btn btn--icon"
-                      style="width: 36px; height: 36px;"
+                      style="width: 36px; height: 36px; background: rgba(239, 68, 68, 0.2); color: #dc2626; border-color: transparent;"
                       title="Reset token"
                       aria-label="Reset token"
                       @click=${async () => {

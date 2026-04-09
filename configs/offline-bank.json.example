@@ -2,7 +2,7 @@
   "meta": {
     "version": "0.1",
     "lastTouchedVersion": "2026.3.14",
-    "lastTouchedAt": "2026-03-28T15:15:37.350Z"
+    "lastTouchedAt": "2026-04-02T07:17:34.169Z"
   },
   "logging": {
     "level": "info"
@@ -16,16 +16,19 @@
   "models": {
     "providers": {
       "local-openai": {
-        "baseUrl": "https://coding.dashscope.aliyuncs.com/v1",
-        "apiKey": "sk-sp-551e69fb55204c479453cd31a28a93d5",
+        "baseUrl": "http://YOUR_SERVER:8080/v2/coding",
+        "apiKey": "YOUR_GLM_API_KEY",
         "api": "openai-completions",
         "models": [
           {
-            "id": "qwen3.5-plus",
-            "name": "qwen3.5-plus",
+            "id": "glm-5",
+            "name": "glm-5",
             "api": "openai-completions",
             "reasoning": true,
-            "input": ["text", "image"],
+            "input": [
+              "text",
+              "image"
+            ],
             "cost": {
               "input": 0,
               "output": 0,
@@ -36,16 +39,42 @@
             "maxTokens": 32768
           }
         ]
+      },
+      "volces-kimi": {
+        "baseUrl": "https://ark.cn-beijing.volces.com/api/coding/v3",
+        "apiKey": "YOUR_KIMI_API_KEY",
+        "api": "openai-completions",
+        "models": [
+          {
+            "id": "kimi-k2.5",
+            "name": "Kimi K2.5",
+            "api": "openai-completions",
+            "reasoning": true,
+            "input": [
+              "text",
+              "image"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 262144,
+            "maxTokens": 32768
+          }
+        ]
       }
     }
   },
   "agents": {
     "defaults": {
       "model": {
-        "primary": "local-openai/qwen3.5-plus"
+        "primary": "local-openai/glm-5"
       },
       "models": {
-        "local-openai/qwen3.5-plus": {}
+        "local-openai/glm-5": {},
+        "volces-kimi/kimi-k2.5": {}
       },
       "sandbox": {
         "mode": "off"
@@ -57,11 +86,15 @@
         "default": true,
         "name": "Default Agent",
         "model": {
-          "primary": "local-openai/qwen3.5-plus"
+          "primary": "local-openai/glm-5"
         },
-        "skills": ["tencent_stock", "pdf_reader"],
         "tools": {
-          "allow": ["bash", "read", "write", "edit", "image", "apply_patch", "grep", "find", "ls"]
+          "allow": [
+            "bash",
+            "read",
+            "write",
+            "edit"
+          ]
         }
       }
     ]
@@ -70,12 +103,28 @@
     "exec": {
       "security": "allowlist",
       "ask": "on-miss",
-      "pathPrepend": ["scripts", "tools"],
-      "safeBins": ["python", "python3", "node", "npm", "powershell", "pwsh", "cmd", "cmd.exe"]
+      "pathPrepend": [
+        "scripts",
+        "tools"
+      ],
+      "safeBins": [
+        "python",
+        "python3",
+        "node",
+        "npm",
+        "powershell",
+        "pwsh",
+        "cmd",
+        "cmd.exe"
+      ]
     },
     "fs": {
       "workspaceOnly": false,
-      "allowedDirectories": ["/home/user/shared-docs"]
+      "allowedDirectories": [
+        "C:\\Users\\YOUR_USER\\My Projects\\AIAgentLab\\openclaw_mini",
+        "C:\\Users\\YOUR_USER\\Documents",
+        "C:\\Users\\YOUR_USER\\Desktop"
+      ]
     }
   },
   "media": {
@@ -118,7 +167,7 @@
     },
     "auth": {
       "mode": "token",
-      "token": "43c679ef72ac8ca8f2e776573596743c49d99f7512acb14c"
+      "token": "YOUR_GATEWAY_TOKEN"
     },
     "audit": {
       "enabled": true,
@@ -129,6 +178,9 @@
   },
   "plugins": {
     "enabled": true,
-    "allow": ["memory-core", "memory-lancedb"]
+    "allow": [
+      "memory-core",
+      "memory-lancedb"
+    ]
   }
 }

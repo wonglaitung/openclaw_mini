@@ -146,3 +146,6 @@ changelog/fragments/
 # Backup files
 *.bak
 *.bak.[0-9]
+
+# Local config with API keys
+configs/offline-bank.json

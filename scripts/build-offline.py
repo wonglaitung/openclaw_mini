@@ -53,10 +53,12 @@ def main() -> int:
     # 设置环境变量
     os.environ["OPENCLAW_INCLUDE_OPTIONAL_BUNDLED"] = "0"
     os.environ["OPENCLAW_BUILD_PROFILE"] = "offline"
+    os.environ["OPENCLAW_A2UI_SKIP_MISSING"] = "1"
 
     print("📋 构建配置：")
     print_step("OPENCLAW_INCLUDE_OPTIONAL_BUNDLED=0")
     print_step("OPENCLAW_BUILD_PROFILE=offline")
+    print_step("OPENCLAW_A2UI_SKIP_MISSING=1")
     print()
 
     # 清理旧的构建产物
