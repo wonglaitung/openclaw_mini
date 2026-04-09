@@ -16,13 +16,13 @@
   "models": {
     "providers": {
       "local-openai": {
-        "baseUrl": "https://coding.dashscope.aliyuncs.com/v1",
-        "apiKey": "sk-sp-551e69fb55204c479453cd31a28a93d5",
+        "baseUrl": "http://YOUR_SERVER:8080/v2/coding",
+        "apiKey": "YOUR_GLM_API_KEY",
         "api": "openai-completions",
         "models": [
           {
-            "id": "qwen3.5-plus",
-            "name": "qwen3.5-plus",
+            "id": "glm-5",
+            "name": "glm-5",
             "api": "openai-completions",
             "reasoning": true,
             "input": [
@@ -39,16 +39,42 @@
             "maxTokens": 32768
           }
         ]
+      },
+      "volces-kimi": {
+        "baseUrl": "https://ark.cn-beijing.volces.com/api/coding/v3",
+        "apiKey": "YOUR_KIMI_API_KEY",
+        "api": "openai-completions",
+        "models": [
+          {
+            "id": "kimi-k2.5",
+            "name": "Kimi K2.5",
+            "api": "openai-completions",
+            "reasoning": true,
+            "input": [
+              "text",
+              "image"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 262144,
+            "maxTokens": 32768
+          }
+        ]
       }
     }
   },
   "agents": {
     "defaults": {
       "model": {
-        "primary": "local-openai/qwen3.5-plus"
+        "primary": "local-openai/glm-5"
       },
       "models": {
-        "local-openai/qwen3.5-plus": {}
+        "local-openai/glm-5": {},
+        "volces-kimi/kimi-k2.5": {}
       },
       "sandbox": {
         "mode": "off"
@@ -60,7 +86,7 @@
         "default": true,
         "name": "Default Agent",
         "model": {
-          "primary": "local-openai/qwen3.5-plus"
+          "primary": "local-openai/glm-5"
         },
         "tools": {
           "allow": [
@@ -95,9 +121,9 @@
     "fs": {
       "workspaceOnly": false,
       "allowedDirectories": [
-        "C:\\Users\\gyyz-laitungwong\\My Projects\\AIAgentLab\\openclaw_mini",
-        "C:\\Users\\gyyz-laitungwong\\Documents",
-        "C:\\Users\\gyyz-laitungwong\\Desktop"
+        "C:\\Users\\YOUR_USER\\My Projects\\AIAgentLab\\openclaw_mini",
+        "C:\\Users\\YOUR_USER\\Documents",
+        "C:\\Users\\YOUR_USER\\Desktop"
       ]
     }
   },
@@ -141,7 +167,7 @@
     },
     "auth": {
       "mode": "token",
-      "token": "43c679ef72ac8ca8f2e776573596743c49d99f7512acb14c"
+      "token": "YOUR_GATEWAY_TOKEN"
     },
     "audit": {
       "enabled": true,
