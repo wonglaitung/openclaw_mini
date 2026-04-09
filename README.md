@@ -38,8 +38,8 @@ The Bank Deployment variant addresses security and compliance requirements in ba
 
 | Metric             | Original | Bank Deployment | Reduction |
 | ------------------ | -------- | --------------- | --------- |
-| Package Size       | 152M     | 36M             | 76%       |
-| JS Files           | 3,563    | 785             | 78%       |
+| Package Size       | 152M     | 37M             | 76%       |
+| JS Files           | 3,563    | 825             | 77%       |
 | Messaging Channels | 15+      | 0 (disabled)    | 100%      |
 | Optional Plugins   | 10+      | 0 (disabled)    | 100%      |
 
@@ -50,6 +50,7 @@ The Bank Deployment variant addresses security and compliance requirements in ba
 - **Audit Logging**: Daily log rotation, structured JSON output, operation details extraction
 - **PowerShell Fallback Strategy**: PS 7 → PS 5.1 → cmd.exe with WSL path conversion
 - **Token-Based Authentication**: Local loopback access with secure token management
+- **A2UI Removal**: Canvas tool display UI for mobile apps removed (not needed for bank deployment)
 
 ### Configuration
 
@@ -76,7 +77,7 @@ The offline bank configuration is located at `configs/offline-bank.json`:
 
 ```bash
 # Build with offline profile
-OPENCLAW_BUILD_PROFILE=offline pnpm build
+OPENCLAW_INCLUDE_OPTIONAL_BUNDLED=0 OPENCLAW_BUILD_PROFILE=offline OPENCLAW_A2UI_SKIP_MISSING=1 pnpm build
 
 # Run with bank configuration
 OPENCLAW_CONFIG_PATH=configs/offline-bank.json node openclaw.mjs gateway run --port 18789
@@ -86,6 +87,7 @@ OPENCLAW_CONFIG_PATH=configs/offline-bank.json node openclaw.mjs gateway run --p
 
 - `OPENCLAW_INCLUDE_OPTIONAL_BUNDLED=0` - Exclude optional bundles
 - `OPENCLAW_BUILD_PROFILE=offline` - Use offline build profile
+- `OPENCLAW_A2UI_SKIP_MISSING=1` - Skip A2UI bundling (not needed for bank deployment)
 - `OPENCLAW_CONFIG_PATH` - Path to configuration file
 
 ## Documentation
@@ -111,7 +113,7 @@ git checkout bank
 pnpm install
 
 # Build with offline profile
-OPENCLAW_INCLUDE_OPTIONAL_BUNDLED=0 OPENCLAW_BUILD_PROFILE=offline pnpm build
+OPENCLAW_INCLUDE_OPTIONAL_BUNDLED=0 OPENCLAW_BUILD_PROFILE=offline OPENCLAW_A2UI_SKIP_MISSING=1 pnpm build
 
 # Run with bank configuration
 OPENCLAW_CONFIG_PATH=configs/offline-bank.json node openclaw.mjs gateway run --port 18789
@@ -146,8 +148,8 @@ find dist/ -name "*.js" | wc -l
 
 Expected output:
 
-- Package size: ~36M
-- JS files: ~785
+- Package size: ~37M
+- JS files: ~825
 
 ### Migration from Main Branch
 

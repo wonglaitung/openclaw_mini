@@ -1,41 +1,27 @@
 # OpenClaw 项目学习与经验教训
 
-## 项目初始化与构建优化
-
-### Git 工作流
+## Git 工作流
 
 - 修改开源项目前先 fork 到个人仓库
 - 推送代码到个人 fork，而非官方仓库
 
-### 插件化架构
+## 插件化架构
 
 - 消息渠道和插件可通过配置禁用
 - `plugins.deny: ["*"]` 完全禁用不需要的功能
 
-### 构建时裁减
+## 构建时裁减
 
 | 方式       | 优点             | 缺点           | 适用场景 |
 | ---------- | ---------------- | -------------- | -------- |
 | 运行时配置 | 简单灵活         | 代码和依赖仍在 | 快速部署 |
 | 构建时排除 | 减少包体积和依赖 | 需修改代码     | 特定部署 |
 
-### 安全配置
+## 安全配置
 
 - `tools.fs.workspaceOnly: true` 限制文件操作范围
 - `tools.exec.safeBins` 白名单允许的二进制文件
 - `gateway.auth.mode: "token"` 本地回环访问
-
-## 文件系统访问控制
-
-### 路径处理特性
-
-- 支持绝对/相对路径、跨平台兼容
-- 自动规范化、子目录自动允许
-- 防止部分目录名匹配
-
-### 测试覆盖
-
-- 18 个测试用例，全部通过
 
 ## Windows 系统适配
 
@@ -74,32 +60,19 @@ if (process.platform === "win32") {
 Agent 覆盖 > 运行时配置 defaults > 主配置 tools.exec > 硬编码默认值
 ```
 
-### 继承机制
+### 配置同步检查
 
-- 子配置从父配置继承默认值
-- 清晰的优先级规则
-- 避免重复配置
+```
+类型定义 (types.gateway.ts)
+    ↓
+Zod Schema (zod-schema.ts)
+    ↓
+配置文件 (configs/offline-bank.json)
+    ↓
+UI 渲染 (app-render.ts)
+```
 
-### 配置验证
-
-- TypeScript 类型检查（编译时）
-- Zod Schema 验证（运行时）
-- 两者必须同步更新
-
-## 审计日志
-
-### 日志文件管理
-
-- 位置：`~/.openclaw/logs/audit-YYYY-MM-DD.log`
-- 格式：JSON Lines
-- 自动轮换：每天零点
-
-### 日志策略
-
-| 日志类型 | 用途         | 输出位置  |
-| -------- | ------------ | --------- |
-| 主日志   | 系统运行信息 | 标准输出  |
-| 审计日志 | 操作审计     | audit.log |
+任一修改需同步更新其他位置，避免类型不匹配或验证失败。
 
 ## 开发工作流
 
@@ -124,13 +97,6 @@ Agent 覆盖 > 运行时配置 defaults > 主配置 tools.exec > 硬编码默认
 - 使用 `grep` 搜索配置项
 - 硬刷新页面（Ctrl + Shift + R）
 
-## 用户体验
-
-- 隐藏的功能不应在配置界面显示
-- 保持 UI 一致性和逻辑性
-- 根据用户习惯设置合理默认值
-- UI 响应式布局支持小屏幕
-
 ## 菜单可见性配置
 
 ### 默认行为设计
@@ -146,27 +112,6 @@ const isTabVisible = (tabKey: string): boolean => {
   return menuVisibility?.[tabKey] === true;
 };
 ```
-
-### 配置更新要点
-
-- 菜单项需同时更新三个位置：类型定义、Zod schema、配置文件
-- 使用 `.strict()` 模式防止未定义的配置项通过验证
-- UI 渲染逻辑需与 schema 验证规则保持一致
-- 修改默认行为前需评估对现有配置的影响
-
-### 配置同步检查
-
-```
-类型定义 (types.gateway.ts)
-    ↓
-Zod Schema (zod-schema.ts)
-    ↓
-配置文件 (configs/offline-bank.json)
-    ↓
-UI 渲染 (app-render.ts)
-```
-
-任一修改需同步更新其他位置，避免类型不匹配或验证失败。
 
 ## 技能开发
 
@@ -206,67 +151,9 @@ skills/{skill_name}/
    - Dependencies（依赖说明）
    - Resources（资源说明）
 
-### 依赖管理
-
-- 每个技能的 `scripts/` 目录独立管理依赖
-- 使用 `npm init -y` 初始化
-- 常用依赖：
-  - `pdf-parse`：PDF 文本提取
-  - `tesseract.js`：OCR 文字识别
-  - `pdfjs-dist`：高级 PDF 处理
-
-### 错误处理最佳实践
-
-```javascript
-// 依赖检查
-let pdfParse;
-try {
-  pdfParse = require("pdf-parse");
-} catch (error) {
-  console.error("错误: 缺少依赖");
-  console.error("请运行: npm install pdf-parse");
-  process.exit(1);
-}
-
-// 错误处理
-try {
-  const data = await readPDF(filePath);
-  // 处理数据
-} catch (error) {
-  console.error(`错误: ${error.message}`);
-  process.exit(1);
-}
-```
-
-### 命令行参数解析
-
-```javascript
-function parseArgs(args) {
-  const options = {
-    filePath: null,
-    page: null,
-    output: null,
-  };
-
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-
-    if (!arg.startsWith("--")) {
-      options.filePath = arg;
-      continue;
-    }
-
-    const [key, value] = arg.substring(2).split("=");
-    options[key] = value || args[++i];
-  }
-
-  return options;
-}
-```
-
 ### 输出格式标准化
 
-**JSON 格式**：
+**JSON 格式：**
 
 ```json
 {
@@ -281,7 +168,7 @@ function parseArgs(args) {
 }
 ```
 
-**错误格式**：
+**错误格式：**
 
 ```json
 {
@@ -289,39 +176,6 @@ function parseArgs(args) {
   "error": "错误描述"
 }
 ```
-
-### OCR 实现要点
-
-1. **语言支持**
-   - 简体中文：`chi_sim`
-   - 繁体中文：`chi_tra`
-   - 英文：`eng`
-   - 混合：`chi_sim+eng`
-
-2. **性能优化**
-   - 按页面处理，避免内存溢出
-   - 使用进度条显示识别进度
-   - 保存中间结果
-
-3. **输出组织**
-   ```
-   ocr_output/
-   ├── page_1.png      # 渲染图片
-   ├── page_1.txt      # 识别文本
-   ├── page_2.png
-   ├── page_2.txt
-   └── ocr_summary.json # 汇总信息
-   ```
-
-### 技能测试检查清单
-
-- [ ] 依赖包正确安装
-- [ ] 无参数运行显示帮助信息
-- [ ] 文件不存在时给出清晰错误提示
-- [ ] 输出格式符合规范
-- [ ] 支持常用选项（--page, --output 等）
-- [ ] 错误处理完善
-- [ ] 文档完整且准确
 
 ## Bank Deployment 重构经验
 
@@ -371,135 +225,6 @@ function parseArgs(args) {
    - `node_modules/` - npm 依赖
    - `vendor/` - 第三方依赖
 
-### 构建系统依赖分析
-
-**关键入口点：**
-
-- `tsdown.config.ts` - 定义构建入口点
-- `knip.config.ts` - 定义未使用代码检查
-- `src/plugin-sdk/` - 为扩展提供 SDK 接口
-
-**扩展 SDK 的作用：**
-
-- 为扩展提供统一的 API 接口
-- 处理扩展的加载、初始化和通信
-- 在 `src/` 中有大量对 `extensions/` 的导入
-
-**删除扩展的影响：**
-
-- 构建系统依赖扩展的存在
-- 删除扩展会导致 `tsdown.config.ts` 中的入口点解析失败
-- 删除扩展会导致 `knip.config.ts` 中的配置验证失败
-
-### 构建配置的正确方式
-
-**离线构建脚本（推荐）：**
-
-```bash
-# 设置环境变量
-export OPENCLAW_INCLUDE_OPTIONAL_BUNDLED=0
-export OPENCLAW_BUILD_PROFILE=offline
-
-# 运行构建
-pnpm build
-```
-
-**效果：**
-
-- 构建产物：37M（从 152M 减少 76%）
-- JS 文件：826 个（从 3,563 个减少 77%）
-- 不包含任何消息渠道
-- 不包含可选插件
-- 适合银行内网部署
-
-### 共享代码引用问题
-
-**问题：**
-
-- `src/agents/tool-display.ts` 和 `ui/src/ui/tool-display.ts` 都引用了 `apps/shared/OpenClawKit/Sources/OpenClawKit/Resources/tool-display.json`
-- 删除 `apps/` 后导致 UI 构建失败
-
-**解决方案：**
-
-1. 移除对 `apps/shared/` 的引用
-2. 改为使用 `src/agents/tool-display-overrides.json` 作为配置源
-3. 保持配置数据的完整性
-
-**修改示例：**
-
-```typescript
-// 修改前
-import SHARED_TOOL_DISPLAY_JSON from "../../../apps/shared/...";
-
-// 修改后
-import TOOL_DISPLAY_OVERRIDES_JSON from "../../../src/agents/tool-display-overrides.json";
-const SHARED_TOOL_DISPLAY_CONFIG = {} as ToolDisplayConfig;
-```
-
-### 大规模代码删除的风险评估
-
-**删除前的必要检查：**
-
-1. 搜索所有对该目录的引用
-2. 检查构建配置文件中的依赖
-3. 评估对测试的影响
-4. 确认不影响核心功能
-
-**验证方法：**
-
-```bash
-# 搜索引用
-grep -r "apps/" src/ --include="*.ts" --include="*.js" | head -20
-
-# 检查构建配置
-grep "extensions/" tsdown.config.ts knip.config.ts
-
-# 尝试构建
-pnpm build
-```
-
-### 回滚策略
-
-**Git 回滚命令：**
-
-```bash
-# 回退到指定提交
-git reset --hard <commit-hash>
-
-# 回退并保留更改
-git revert <commit-hash>
-```
-
-**经验教训：**
-
-- 删除前先提交当前工作
-- 保留回退选项
-- 小步骤验证（每次只删除一个目录）
-- 构建失败立即停止并分析原因
-
-### 项目精简的最佳实践
-
-**分层删除法：**
-
-1. 第一层：删除完全独立的项目（apps、Swabble）
-2. 第二层：删除可重新生成的产物（dist、dist-runtime）
-3. 第三层：删除不必要的文档和测试（docs/、test/、test-fixtures/）
-4. 第四层：根据需要删除扩展（需仔细评估依赖关系）
-
-**渐进式验证：**
-
-```bash
-# 删除一个目录 → 验证构建 → 提交
-rm -rf apps/
-pnpm build
-git commit -m "remove apps/"
-
-# 删除下一个目录 → 验证构建 → 提交
-rm -rf Swabble/
-pnpm build
-git commit -m "remove Swabble/"
-```
-
 ### 离线构建的配置文件
 
 **environment variables（环境变量）：**
@@ -507,6 +232,7 @@ git commit -m "remove Swabble/"
 ```bash
 OPENCLAW_INCLUDE_OPTIONAL_BUNDLED=0  # 排除可选 bundles
 OPENCLAW_BUILD_PROFILE=offline          # 使用离线构建配置
+OPENCLAW_A2UI_SKIP_MISSING=1            # 跳过 A2UI bundling
 ```
 
 **configs/offline-bank.json 关键配置：**
@@ -558,23 +284,640 @@ OPENCLAW_BUILD_PROFILE=offline          # 使用离线构建配置
 }
 ```
 
-### 构建产物验证
+### 大规模代码删除的风险评估
 
-**验证脚本：**
+**删除前的必要检查：**
+
+1. 搜索所有对该目录的引用
+2. 检查构建配置文件中的依赖
+3. 评估对测试的影响
+4. 确认不影响核心功能
+
+**验证方法：**
 
 ```bash
-# 检查包大小
-du -sh dist/
+# 搜索引用
+grep -r "apps/" src/ --include="*.ts" --include="*.js" | head -20
 
-# 检查 JS 文件数量
-find dist/ -name "*.js" | wc -l
+# 检查构建配置
+grep "extensions/" tsdown.config.ts knip.config.ts
 
-# 检查是否包含不必要的文件
-find dist/ -name "*telegram*" -o -name "*whatsapp*" -o -name "*slack*"
+# 尝试构建
+pnpm build
 ```
 
-**预期结果：**
+### 项目精简的最佳实践
 
-- 包大小：~37M
-- JS 文件数：~826
-- 不包含任何消息渠道相关的文件
+**分层删除法：**
+
+1. 第一层：删除完全独立的项目（apps、Swabble）
+2. 第二层：删除可重新生成的产物（dist、dist-runtime）
+3. 第三层：删除不必要的文档和测试（docs/、test/、test-fixtures/）
+4. 第四层：根据需要删除扩展（需仔细评估依赖关系）
+
+**渐进式验证：**
+
+```bash
+# 删除一个目录 → 验证构建 → 提交
+rm -rf apps/
+pnpm build
+git commit -m "remove apps/"
+
+# 删除下一个目录 → 验证构建 → 提交
+rm -rf Swabble/
+pnpm build
+git commit -m "remove Swabble/"
+```
+
+## A2UI Bundling 问题与解决
+
+### 问题背景
+
+**A2UI 的作用：**
+
+- Canvas tool display UI for mobile apps (Android/iOS)
+- 在 WebView 中显示工具 UI
+- 与 mobile apps 通过 WebSocket 通信
+
+**删除 apps/ 的影响：**
+
+- A2UI sources 位于 `apps/shared/OpenClawKit/Tools/CanvasA2UI/`
+- A2UI renderer 位于 `vendor/a2ui/renderers/lit/`
+- 删除 apps/ 后，缺少 A2UI sources
+- bundle-a2ui.sh 失败：缺少 sources 和 prebuilt bundle
+
+### 解决方案
+
+**修改 build 脚本：**
+
+```json
+"build": "bash -c 'if [ \"$OPENCLAW_BUILD_PROFILE\" = \"offline\" ] || [ \"$OPENCLAW_A2UI_SKIP_MISSING\" = \"1\" ]; then echo \"Skipping A2UI bundle (offline build)\"; else pnpm canvas:a2ui:bundle; fi' && node scripts/tsdown-build.mjs && ... && node --import tsx scripts/canvas-a2ui-copy.ts && ..."
+```
+
+**原理：**
+
+- 检查环境变量 `OPENCLAW_BUILD_PROFILE` 或 `OPENCLAW_A2UI_SKIP_MISSING`
+- 如果为 offline 或 skip，跳过 `canvas:a2ui:bundle`
+- 继续执行后续构建步骤
+- `canvas-a2ui-copy.ts` 检测到 `OPENCLAW_A2UI_SKIP_MISSING=1` 时优雅跳过
+
+### 离线构建脚本更新
+
+**所有离线构建脚本都添加：**
+
+```bash
+export OPENCLAW_INCLUDE_OPTIONAL_BUNDLED=0
+export OPENCLAW_BUILD_PROFILE=offline
+export OPENCLAW_A2UI_SKIP_MISSING=1
+```
+
+### 经验教训
+
+**1. 构建系统的脆弱性**
+
+- 简单的删除操作可能破坏构建链
+- 需要理解每个构建步骤的依赖关系
+
+**2. 环境变量的作用**
+
+- `OPENCLAW_BUILD_PROFILE`：控制构建行为（offline/docker/normal）
+- `OPENCLAW_INCLUDE_OPTIONAL_BUNDLED`：控制可选 bundles 的包含
+- `OPENCLAW_A2UI_SKIP_MISSING`：控制 A2UI 构建的跳过
+
+**3. 渐进式修改原则**
+
+- 一次只修改一个地方
+- 修改后立即验证
+- 保持回退选项
+
+## UI 样式优化
+
+### 问题与解决
+
+**需求：**
+
+- 为 Overview 页面的 reset token 按钮添加红色背景
+- 突出危险操作的重要性
+
+**遇到的问题：**
+
+1. `.btn.danger` 使用 `var(--danger-subtle)` CSS 变量，透明度只有 0.08，几乎看不见
+2. 添加专用样式 `.btn--icon.danger` 可能被其他 CSS 规则覆盖
+
+**最终解决方案：使用内联样式**
+
+```typescript
+<button
+  type="button"
+  class="btn btn--icon"
+  style="width: 36px; height: 36px; background: rgba(239, 68, 68, 0.2); color: #dc2626; border-color: transparent;"
+  title="Reset token"
+  aria-label="Reset token"
+  @click=${async () => {
+    if (window.confirm(
+      "Are you sure you want to reset the gateway token? This will invalidate all existing connections."
+    )) {
+      await props.onResetToken();
+    }
+  }}
+>
+  ${icons.refresh}
+</button>
+```
+
+**内联样式的优势：**
+
+1. **最高优先级**：内联样式不受 CSS 层叠规则影响
+2. **简单直接**：不需要修改 CSS 文件
+3. **可维护性**：样式定义在组件内部，易于理解
+4. **跨主题兼容**：不依赖 CSS 变量，适用于所有主题
+
+### 经验教训
+
+**1. CSS 变量的透明度陷阱**
+
+- 需要检查 CSS 变量的实际值，不要假设
+- 对于危险操作，需要更明显的视觉提示
+
+**2. CSS 层叠的复杂性**
+
+- 添加新类可能被其他规则覆盖
+- 内联样式可以避免这些复杂性
+
+**3. 渐进式调试方法**
+
+- 先添加 CSS 类，验证效果
+- 如果不可见，检查 CSS 变量值
+- 如果被覆盖，提高特异性或使用内联样式
+
+**4. 删除不必要的修改**
+
+- 一旦找到有效方案，删除所有尝试性修改
+- 保持代码简洁，避免冗余
+- 使用 `git reset --soft` 回退中间提交
+
+**5. Git 工作流的重要性**
+
+```bash
+# 回退到有效提交之前
+git reset --soft <commit-hash>
+
+# 清理所有中间修改
+git restore <files>
+
+# 只保留最终方案
+git add <final-files>
+git commit -m "final solution"
+```
+
+## 测试检查清单
+
+**离线构建验证：**
+
+- [ ] 离线构建成功（无错误）
+- [ ] 构建产物大小符合预期（~37M）
+- [ ] 服务启动正常
+- [ ] Gateway UI 可访问
+- [ ] 核心功能正常（聊天、agents、工具）
+- [ ] A2UI 请求返回 503（预期行为）
+
+## 跨平台路径处理
+
+### Windows vs WSL 的路径差异
+
+**问题背景：**
+
+- 代码中假设系统在 WSL（Windows Subsystem for Linux）中运行
+- 实际系统可能是原生 Windows
+- 路径转换逻辑错误导致权限验证失败
+
+**错误代码示例：**
+
+```typescript
+// 错误：总是将 Windows 路径转换为 WSL 格式
+if (/^[A-Za-z]:[\\/]/.test(filePath)) {
+  const drive = filePath[0].toLowerCase();
+  const restPath = filePath.substring(2).replace(/\\/g, "/");
+  resolvedPath = `/mnt/${drive}/${restPath}`;
+}
+```
+
+**正确代码示例：**
+
+```typescript
+// 正确：根据平台选择路径处理方式
+const isWindows = process.platform === "win32";
+
+if (isWindows) {
+  // Windows 平台，直接使用 Windows 路径
+  resolvedPath = path.resolve(filePath);
+} else {
+  // WSL/Unix 平台，转换 Windows 路径
+  if (/^[A-Za-z]:[\\/]/.test(filePath)) {
+    const drive = filePath[0].toLowerCase();
+    const restPath = filePath.substring(2).replace(/\\/g, "/");
+    resolvedPath = `/mnt/${drive}/${restPath}`;
+  } else {
+    resolvedPath = path.resolve(filePath);
+  }
+}
+```
+
+### 平台检测的重要性
+
+**关键原则：**
+
+1. **使用 `process.platform` 而非路径特征判断**
+   - `process.platform === "win32"` - 原生 Windows
+   - `process.platform === "linux"` - Linux 或 WSL
+   - `process.platform === "darwin"` - macOS
+
+2. **路径特征只能作为辅助验证**
+   - `/^[A-Za-z]:[\\/]/.test(path)` - Windows 绝对路径
+   - `/^\/mnt\//.test(path)` - WSL 挂载点
+   - 这些特征不能可靠区分平台
+
+### 路径规范化的最佳实践
+
+**跨平台路径处理流程：**
+
+```typescript
+import path from "node:path";
+import os from "node:os";
+
+// 1. 解析为绝对路径
+const absolutePath = path.resolve(inputPath);
+
+// 2. 规范化路径（统一分隔符、解析 .. 和 .）
+const normalizedPath = path.normalize(absolutePath);
+
+// 3. 根据平台进行处理
+if (process.platform === "win32") {
+  // Windows: 使用反斜杠，但 path.normalize() 会处理
+  // 直接比较即可
+} else {
+  // Linux/macOS/WSL: 使用正斜杠
+  // 如果遇到 Windows 路径，需要转换
+  if (/^[A-Za-z]:[\\/]/.test(inputPath)) {
+    // Windows 路径 → WSL 路径
+    const drive = inputPath[0].toLowerCase();
+    const restPath = inputPath.substring(2).replace(/\\/g, "/");
+    resolvedPath = `/mnt/${drive}/${restPath}`;
+  }
+}
+```
+
+### 路径比较的注意事项
+
+**常见陷阱：**
+
+1. **混合路径分隔符**
+   - Windows: `C:\Users\file.txt` vs `C:/Users/file.txt`
+   - 解决：使用 `path.normalize()` 统一
+
+2. **大小写敏感**
+   - Windows: 不区分大小写
+   - Linux/macOS: 区分大小写
+   - 解决：比较前统一大小写或使用平台特定的比较方法
+
+3. **符号链接和硬链接**
+   - 需要解析真实路径
+   - 使用 `fs.realpathSync()` 解析
+
+**正确比较示例：**
+
+```typescript
+function pathsEqual(path1: string, path2: string): boolean {
+  const norm1 = path.normalize(path.resolve(path1));
+  const norm2 = path.normalize(path.resolve(path2));
+
+  if (process.platform === "win32") {
+    return norm1.toLowerCase() === norm2.toLowerCase();
+  }
+  return norm1 === norm2;
+}
+
+function isSubdirectory(parent: string, child: string): boolean {
+  const normParent = path.normalize(path.resolve(parent));
+  const normChild = path.normalize(path.resolve(child));
+
+  if (process.platform === "win32") {
+    normParent = normParent.toLowerCase();
+    normChild = normChild.toLowerCase();
+  }
+
+  // 确保父路径以分隔符结尾
+  const parentWithSep = normParent.endsWith(path.sep)
+    ? normParent
+    : normParent + path.sep;
+
+  return normChild.startsWith(parentWithSep);
+}
+```
+
+## 预设目录豁免机制
+
+### 设计原则
+
+**为什么需要预设目录豁免：**
+
+1. **系统必需目录**
+   - OpenClaw 的配置和状态目录
+   - 用户数据存储目录
+   - 临时文件目录
+
+2. **用户体验考虑**
+   - 不需要手动配置常用目录
+   - 避免因配置错误导致功能失效
+   - 降低使用门槛
+
+3. **安全性考虑**
+   - 预设目录通常是安全的
+   - 限制在用户主目录下
+   - 避免暴露系统敏感目录
+
+### 实现方法
+
+**在路径验证前检查：**
+
+```typescript
+export function isPathInAllowedDirectories(
+  targetPath: string,
+  allowedDirectories: string[],
+): boolean {
+  const path = require("path") as typeof import("path");
+  const os = require("os") as typeof import("os");
+
+  // 1. 规范化目标路径
+  const normalizedTarget = path.normalize(path.resolve(targetPath));
+
+  // 2. 检查预设豁免目录（最高优先级）
+  const openclawDirBase = path.join(os.homedir(), ".openclaw");
+  const normalizedOpenclawDir = path.normalize(path.resolve(openclawDirBase));
+
+  if (normalizedTarget === normalizedOpenclawDir ||
+      normalizedTarget.startsWith(normalizedOpenclawDir + path.sep)) {
+    return true; // 总是允许访问
+  }
+
+  // 3. 检查用户配置的允许目录
+  return allowedDirectories.some((allowedDir) => {
+    const normalizedAllowed = path.normalize(path.resolve(allowedDir));
+    return normalizedTarget === normalizedAllowed ||
+           normalizedTarget.startsWith(normalized + path.sep);
+  });
+}
+```
+
+### 豁免目录的选择
+
+**应豁免的目录：**
+
+1. **OpenClaw 自身目录**
+   - `~/.openclaw/` - 配置、状态、日志
+   - `~/.openclaw/workspace/` - 工作区文件
+   - `~/.openclaw/sessions/` - 会话记录
+   - `~/.openclaw/agents/` - Agent 配置
+
+2. **用户数据目录**
+   - `~/Documents/` - 用户文档（可选）
+   - `~/Desktop/` - 桌面文件（可选）
+   - `~/Downloads/` - 下载文件（可选）
+
+3. **临时目录**
+   - `~/.openclaw/tmp/` - 临时文件
+   - `os.tmpdir()` - 系统临时目录（谨慎）
+
+**不应豁免的目录：**
+
+1. **系统目录**
+   - `C:\Windows\` - Windows 系统目录
+   - `/etc/` - Linux 配置目录
+   - `/root/` - 超级用户目录
+
+2. **其他用户目录**
+   - `/home/otheruser/` - 其他用户的家目录
+   - `C:\Users\OtherUser\` - 其他用户目录
+
+3. **敏感目录**
+   - `~/.ssh/` - SSH 密钥（除非需要）
+   - `~/.aws/` - AWS 凭证（除非需要）
+   - `/var/log/` - 系统日志
+
+### 配置文件中的提示
+
+**在配置文件中添加注释说明：**
+
+```json
+{
+  "tools": {
+    "fs": {
+      "workspaceOnly": false,
+      "allowedDirectories": [
+        "C:\\Users\\gyyz-laitungwong\\My Projects\\AIAgentLab\\openclaw_mini",
+        "C:\\Users\\gyyz-laitungwong\\Documents",
+        "C:\\Users\\gyyz-laitungwong\\Desktop"
+      ],
+      "_comment": "Note: ~/.openclaw directory is always allowed, no need to add it here"
+    }
+  }
+}
+```
+
+**在 UI 中显示提示：**
+
+```html
+<div class="callout info" style="margin-top: 8px">
+  <strong>Note:</strong> The OpenClaw workspace directory (~/.openclaw) is always allowed
+  and does not need to be added to the allowed directories list.
+</div>
+```
+
+## 调试日志的最佳实践
+
+### 使用结构化日志系统
+
+**问题：直接使用 console.log**
+
+```typescript
+// 不推荐：直接使用 console.log
+console.log(`[read tool] Path validation:`, {
+  filePath,
+  resolvedPath,
+  allowedDirectories: options.allowedDirectories,
+  platform: process.platform,
+  isWindows
+});
+```
+
+**推荐：使用 createSubsystemLogger**
+
+```typescript
+// 推荐：使用结构化日志系统
+import { createSubsystemLogger } from "../logging/subsystem.js";
+
+const log = createSubsystemLogger("agents/pi-tools-read");
+
+log.debug(`[read tool] Path validation:`, {
+  filePath,
+  resolvedPath,
+  allowedDirectories: options.allowedDirectories,
+  platform: process.platform,
+  isWindows
+});
+```
+
+### 日志级别的使用
+
+**日志级别指南：**
+
+| 级别 | 用途 | 示例 |
+|------|------|------|
+| `debug` | 详细的调试信息 | 路径解析过程、参数验证 |
+| `info` | 一般信息 | 功能启用/禁用、配置加载 |
+| `warn` | 警告信息 | 配置错误、兼容性问题 |
+| `error` | 错误信息 | 权限拒绝、文件不存在 |
+
+**示例：**
+
+```typescript
+// Debug: 详细过程
+log.debug(`Path validation details:`, {
+  input: filePath,
+  normalized: resolvedPath,
+  allowed: allowedDirectories,
+  result: isAllowed
+});
+
+// Info: 重要状态
+log.info(`Allowed directories configured: ${allowedDirectories.length}`);
+
+// Warn: 配置问题
+log.warn(`Allowed directory does not exist: ${dir}`);
+
+// Error: 权限问题
+log.error(`Access denied to path: ${filePath}`);
+```
+
+### 日志的上下文信息
+
+**包含关键上下文：**
+
+```typescript
+log.debug(`Path validation`, {
+  // 输入参数
+  filePath,
+  allowedDirectories,
+
+  // 处理过程
+  resolvedPath,
+  normalizedTarget,
+  normalizedAllowed,
+
+  // 环境信息
+  platform: process.platform,
+  isWindows: process.platform === "win32",
+  homedir: os.homedir(),
+
+  // 结果
+  isAllowed,
+  reason: isAllowed ? "in allowed list" : "not in allowed list"
+});
+```
+
+### 条件日志
+
+**避免生产环境的性能影响：**
+
+```typescript
+// 不推荐：总是构建日志对象
+log.debug(`Debug info: ${JSON.stringify(expensiveComputation())}`);
+
+// 推荐：先检查日志级别
+if (log.isDebugEnabled()) {
+  const details = expensiveComputation();
+  log.debug(`Debug info:`, details);
+}
+```
+
+### 日志与错误处理
+
+**在错误消息中包含调试信息：**
+
+```typescript
+try {
+  const isAllowed = isPathInAllowedDirectories(resolvedPath, allowedDirectories);
+  log.debug(`Path validation result:`, {
+    path: filePath,
+    resolved: resolvedPath,
+    allowed: isAllowed
+  });
+
+  if (!isAllowed) {
+    log.error(`Access denied: ${filePath}`, {
+      resolvedPath,
+      allowedDirectories,
+      platform: process.platform
+    });
+    throw createFsAccessError("EACCES", filePath);
+  }
+} catch (error) {
+  log.error(`Path validation failed:`, {
+    error: error instanceof Error ? error.message : String(error),
+    stack: error instanceof Error ? error.stack : undefined,
+    filePath,
+    allowedDirectories
+  });
+  throw error;
+}
+```
+
+### UI 输入框样式优化
+
+### 问题
+
+**Allowed Directories 输入框太短，难以输入长路径**
+
+### 解决方案
+
+**使用百分比宽度：**
+
+```typescript
+<input
+  class="field mono"
+  .value=${dir}
+  @input=${(e: Event) => updateDirectory(index, (e.target as HTMLInputElement).value)}
+  ?disabled=${!editable}
+  placeholder="/path/to/directory"
+  autocomplete="off"
+  style="width: 80%;"  // 添加宽度样式
+/>
+```
+
+**优势：**
+
+1. **响应式设计**：自动适应页面宽度
+2. **易于维护**：不需要硬编码像素值
+3. **用户友好**：足够的空间输入长路径
+
+### 进一步优化建议
+
+**考虑其他布局选项：**
+
+1. **全宽输入框**：`width: 100%`
+2. **flex 布局**：自动填充剩余空间
+3. **可调整大小**：添加 resize 功能
+
+**示例：使用 flex 布局**
+
+```html
+<div style="display: flex; gap: 8px; align-items: center;">
+  <input
+    class="field mono"
+    style="flex: 1; min-width: 0;"
+    .value=${dir}
+    @input=${...}
+  />
+  <button class="btn btn--sm" @click=${...}>✕</button>
+</div>
+```

@@ -9,6 +9,7 @@ echo "📦 开始打包 OpenClaw 离线部署包..."
 echo "🔨 构建离线版本..."
 export OPENCLAW_INCLUDE_OPTIONAL_BUNDLED=0
 export OPENCLAW_BUILD_PROFILE=offline
+export OPENCLAW_A2UI_SKIP_MISSING=1
 rm -rf dist
 pnpm build
 
