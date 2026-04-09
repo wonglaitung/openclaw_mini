@@ -33,6 +33,8 @@ echo Starting build...
 echo ========================================
 echo.
 
+call pnpm ui:build
+
 echo [1/10] Running tsdown-build...
 node scripts\tsdown-build.mjs
 if %errorlevel% neq 0 (
