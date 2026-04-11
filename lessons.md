@@ -733,6 +733,188 @@ export function isPathInAllowedDirectories(
 </div>
 ```
 
+## 技能开发进阶
+
+### 跨平台路径处理（Python）
+
+**问题：**
+
+- Windows 用户可能输入 `~\Documents\file.txt`（混合格式）
+- Linux 用户可能输入 `~/Documents/file.txt`
+- 需要在 Python 中统一处理
+
+**解决方案：path_utils.py**
+
+```python
+from pathlib import Path
+
+def normalize_path(raw_path: str) -> str:
+    """Normalize path to unified format (forward slashes)."""
+    # 1. Tilde expansion (~ to home directory)
+    path = Path(raw_path).expanduser()
+    
+    # 2. Convert to absolute path if not already
+    if not path.is_absolute():
+        path = path.resolve()
+    
+    # 3. Normalize to forward slashes for consistency
+    return str(path).replace('\\', '/')
+
+def validate_file_path(raw_path: str) -> Path:
+    """Validate that path exists and is a file."""
+    path = Path(raw_path).expanduser().resolve()
+    if not path.exists():
+        raise FileNotFoundError(f"Path does not exist: {path}")
+    if not path.is_file():
+        raise ValueError(f"Path is not a file: {path}")
+    return path
+```
+
+**使用方式：**
+
+```python
+# 在脚本中使用
+from anomaly_detector.path_utils import normalize_path, validate_file_path
+
+# 规范化路径
+normalized = normalize_path("~/Documents\\My Projects/data.csv")
+# 结果: C:/Users/username/Documents/My Projects/data.csv
+
+# 验证文件路径
+path = validate_file_path(user_input)
+```
+
+### 时间序列分析参数设计
+
+**lookback 参数设计：**
+
+```python
+# 将 --lookback 和 --time-interval 转换为天数
+time_interval_to_days = {
+    'minute': 1 / 1440,  # 1分钟 = 1/1440天
+    'hour': 1 / 24,      # 1小时 = 1/24天
+    'day': 1,            # 1天 = 1天
+    'week': 7,           # 1周 = 7天
+}
+
+# 计算实际天数
+if args.lookback is not None:
+    days_per_unit = time_interval_to_days.get(args.time_interval, 1)
+    args.lookback_days = args.lookback * days_per_unit
+```
+
+**使用场景区分：**
+
+```
+历史回测模式：
+┌────────────────────────────────────────────┐
+│  ←────────── 全部历史数据 ──────────→      │
+│  检测所有异常点                            │
+└────────────────────────────────────────────┘
+
+实时监控模式：
+┌────────────────────────────────────────────┐
+│  历史数据（训练）         │  检测窗口     │
+│  ←─── window-size ───→    │←─ lookback ─→│
+│  计算基准、训练模型        │  报告异常     │
+└────────────────────────────────────────────┘
+```
+
+### Excel 模板字段检测策略
+
+**布局检测逻辑：**
+
+```python
+def detect_layout(ws):
+    """
+    检测 Excel 模板的布局类型。
+    
+    返回：
+    - ('horizontal', 0): 水平布局，字段名在首行
+    - ('vertical', col_idx): 垂直布局，字段名在 col_idx 列
+    """
+    # 1. 检查首行（水平布局）
+    first_row_fields = count_fields_in_row(ws, 1)
+    
+    # 2. 扫描所有列（垂直布局）
+    max_vertical_fields = 0
+    best_column = 1
+    for col in range(1, ws.max_column + 1):
+        field_count = count_fields_in_column(ws, col)
+        if field_count > max_vertical_fields:
+            max_vertical_fields = field_count
+            best_column = col
+    
+    # 3. 选择得分最高的布局
+    if first_row_fields >= max_vertical_fields:
+        return ('horizontal', 0)
+    else:
+        return ('vertical', best_column)
+```
+
+**匹配策略优先级：**
+
+```
+自定义映射 > 精确匹配 > 模糊匹配
+```
+
+### 技能模块复用
+
+**共享工具模块：**
+
+```
+skills/
+├── anomaly-detector/
+│   └── anomaly_detector/
+│       ├── path_utils.py    # 跨平台路径工具
+│       ├── __init__.py      # 导出公共接口
+│       └── ...
+└── excel-auto-fill/
+    └── excel_auto_fill/
+        ├── path_utils.py    # 复制相同的路径工具
+        └── ...
+```
+
+**最佳实践：**
+
+1. **共享工具放在 `__init__.py` 导出**
+2. **相同的工具可以复制到多个技能**（避免跨技能依赖）
+3. **文档中说明工具的用途和用法**
+
+### 技能文档结构
+
+**SKILL.md 必需章节：**
+
+```markdown
+---
+name: skill-name
+description: 技能描述
+---
+
+# Skill Name
+
+## 检查操作系统
+## 何时使用此技能
+## 使用场景
+## 核心能力
+## 当前限制
+## 安装依赖
+## 使用流程
+### Windows 用户
+### Linux/macOS 用户
+## 命令行参数
+## 数据格式要求
+## 常见问题
+```
+
+**关键要点：**
+
+1. **YAML frontmatter** 必须包含 `name` 和 `description`
+2. **操作系统检测** 帮助用户选择正确的命令
+3. **使用场景** 让用户快速判断是否适用
+4. **命令行参数表格** 提供完整参考
+5. **常见问题** 减少支持负担
+
 ## 调试日志的最佳实践
 
 ### 使用结构化日志系统

@@ -90,4 +90,22 @@
 - 添加调试日志：使用 `createSubsystemLogger` 记录路径验证过程
 - UI 优化：Allowed Directories 输入框宽度设置为页面的 80%
 - 添加 OpenClaw 预设工作目录豁免：`~/.openclaw` 目录总是允许访问，不受 `allowedDirectories` 限制影响
-- 支持跨平台：Windows（C:\Users\username\.openclaw）、Linux（/home/username/.openclaw）、macOS（/Users/username/.openclaw）
+- 支持跨平台：Windows（C:\Users\username\.openclaw）、Linux（/home/username\.openclaw）、macOS（/Users/username\.openclaw）
+
+## 2026-04-11 - 技能系统增强
+### anomaly-detector 技能增强
+- 新增 `--lookback` 参数：支持时间间隔感知（minute/hour/day/week）
+- 弃用 `--lookback-days` 参数：建议使用 `--lookback`
+- 添加跨平台路径规范化工具 `path_utils.py`：处理混合路径格式（Unix ~/ 和 Windows 反斜杠）
+- 改进文档：添加使用场景（历史回测 vs 实时监控）、数据量要求、工作流程对比图
+- 添加数据不足警告：检测窗口内数据点少于 20 时发出警告
+- Z-Score 检测支持 lookback 过滤：与 Isolation Forest 行为一致
+
+### excel-auto-fill 新技能
+- 实现功能：Excel 模板自动填充
+- 支持标记格式：`${fieldName}` 和 `{{fieldName}}`
+- 自动检测字段布局：水平布局（字段名在首行）和垂直布局（字段名在某列）
+- 智能匹配策略：精确匹配、模糊匹配、自定义映射
+- 多种输入格式：JSON 文件、JSON 字符串、键值对文本
+- 格式保留：字体、边框、颜色完整保留
+- 跨平台支持：Windows 批处理脚本 + Linux/macOS Python 脚本
