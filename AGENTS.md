@@ -1,5 +1,7 @@
 # Repository Guidelines
 
+OpenClaw is a multi-channel AI gateway with extensible messaging integrations. This is the **bank** branch, optimized for offline banking and enterprise deployment with strict security controls, audit logging, and minimal attack surface (76% size reduction from main branch).
+
 - Repo: https://github.com/openclaw/openclaw
 - In chat replies, file references must be repo-root relative only (example: `extensions/bluebubbles/src/channel.ts:80`); never absolute paths or `~/...`.
 - Do not edit files covered by security-focused `CODEOWNERS` rules unless a listed owner explicitly asked for the change or is already reviewing it with you. Treat those paths as restricted surfaces, not drive-by cleanup.
@@ -153,14 +155,15 @@
 - Rebrand/migration issues or legacy config/service warnings: run `openclaw doctor` (see `docs/gateway/doctor.md`).
 - **Bank Offline Deployment** (configs/offline-bank.json):
   - **Build Scripts**: `scripts/build-offline.sh` (Bash), `scripts/build-offline.ps1` (PowerShell), `scripts/build-offline.py` (Python)
-  - **Environment**: `OPENCLAW_INCLUDE_OPTIONAL_BUNDLED=0`, `OPENCLAW_BUILD_PROFILE=offline`
-  - **Excluded**: 15 messaging channels + 10 optional plugins (76% size reduction: 152M → 36M)
+  - **Environment**: `OPENCLAW_INCLUDE_OPTIONAL_BUNDLED=0`, `OPENCLAW_BUILD_PROFILE=offline`, `OPENCLAW_A2UI_SKIP_MISSING=1`
+  - **Excluded**: 15 messaging channels + 10 optional plugins (76% size reduction: 152M → 37M)
   - **Security**: Tool allowlist, safe binaries, workspace restrictions, path prepend
   - **Audit Logging**: `gateway.audit.enabled: true` (JSON Lines format, detailed/basic/verbose levels)
   - **PowerShell Fallback**: Auto-detect + fallback to cmd.exe with syntax translation (src/agents/shell-fallback.ts)
   - **UI Customization**: Menu visibility control, custom branding, simplified login page
   - **Startup**: `OPENCLAW_CONFIG_PATH=configs/offline-bank.json node openclaw.mjs gateway run --port 18789`
   - **Documentation**: `scripts/README-OFFLINE.md`
+  - **Verification**: `du -sh dist/` (expect ~37M), `find dist/ -name "*.js" | wc -l` (expect ~825)
 - Use `$openclaw-parallels-smoke` at `.agents/skills/openclaw-parallels-smoke/SKILL.md` for Parallels smoke, rerun, upgrade, debug, and result-interpretation workflows across macOS, Windows, and Linux guests.
 - For the macOS Discord roundtrip deep dive, use the narrower `.agents/skills/parallels-discord-roundtrip/SKILL.md` companion skill.
 - Never edit `node_modules` (global/Homebrew/npm/git installs too). Updates overwrite. Skill notes go in `tools.md` or `AGENTS.md`.
@@ -196,6 +199,17 @@
 - **功能更新后：**
   - 更新 `progress.txt`，记录新的进展
   - 如有新的学习心得或经验教训，更新 `lessons.md`
+
+## Skills Directory
+
+Custom skills are located in `skills/` directory. Each skill has:
+- `SKILL.md` - Skill documentation with YAML frontmatter (name, description)
+- `scripts/` - Executable scripts for the skill
+
+Current skills:
+- `anomaly-detector` - Time series anomaly detection (Isolation Forest, Z-Score)
+- `excel-auto-fill` - Excel template auto-fill with field detection
+- `pdf_reader` - PDF text extraction, OCR, and image extraction
 
 ## Collaboration / Safety Notes
 
