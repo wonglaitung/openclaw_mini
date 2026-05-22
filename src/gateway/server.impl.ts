@@ -528,6 +528,30 @@ export async function startGatewayServer(
     );
   }
 
+  // Validate license if enabled
+  const licenseConfig = cfgAtStart.gateway?.license;
+  if (licenseConfig?.enabled) {
+    const { validateLicense } = await import("../license/index.js");
+    const licenseResult = validateLicense({
+      gracePeriodHours: licenseConfig.gracePeriodHours ?? 24,
+    });
+
+    if (!licenseResult.valid) {
+      log.error(`License validation failed: ${licenseResult.reason}`);
+      throw new Error(`Gateway cannot start: ${licenseResult.reason}`);
+    }
+
+    if (licenseResult.inGracePeriod) {
+      log.warn(
+        `License expired. Grace period ends in ${licenseResult.graceHoursRemaining?.toFixed(1)} hours. Please renew your license.`,
+      );
+    }
+
+    log.info(
+      `License valid for user: ${licenseResult.payload?.username} (expires: ${licenseResult.payload?.expiresAt})`,
+    );
+  }
+
   setGatewaySigusr1RestartPolicy({ allowExternal: isRestartEnabled(cfgAtStart) });
   setPreRestartDeferralCheck(
     () => getTotalQueueSize() + getTotalPendingReplies() + getActiveEmbeddedRunCount(),

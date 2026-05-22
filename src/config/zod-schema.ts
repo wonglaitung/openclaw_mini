@@ -765,6 +765,14 @@ export const OpenClawSchema = z
           })
           .strict()
           .optional(),
+        license: z
+          .object({
+            enabled: z.boolean().optional(),
+            gracePeriodHours: z.number().int().min(0).optional(),
+            renewalWarningHours: z.number().int().min(0).optional(),
+          })
+          .strict()
+          .optional(),
         tailscale: z
           .object({
             mode: z.union([z.literal("off"), z.literal("serve"), z.literal("funnel")]).optional(),

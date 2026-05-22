@@ -1,3 +1,4 @@
+import type { GatewayLicenseConfig } from "./types.license.js";
 import type { SecretInput } from "./types.secrets.js";
 
 export type GatewayBindMode = "auto" | "lan" | "loopback" | "custom" | "tailnet";
@@ -481,6 +482,11 @@ export type GatewayConfig = {
    * Important for security-sensitive environments like banking.
    */
   audit?: GatewayAuditConfig;
+  /**
+   * License validation configuration.
+   * Prevents unauthorized use of the gateway.
+   */
+  license?: GatewayLicenseConfig;
 };
 
 /**

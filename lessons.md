@@ -607,9 +607,7 @@ function isSubdirectory(parent: string, child: string): boolean {
   }
 
   // 确保父路径以分隔符结尾
-  const parentWithSep = normParent.endsWith(path.sep)
-    ? normParent
-    : normParent + path.sep;
+  const parentWithSep = normParent.endsWith(path.sep) ? normParent : normParent + path.sep;
 
   return normChild.startsWith(parentWithSep);
 }
@@ -655,16 +653,19 @@ export function isPathInAllowedDirectories(
   const openclawDirBase = path.join(os.homedir(), ".openclaw");
   const normalizedOpenclawDir = path.normalize(path.resolve(openclawDirBase));
 
-  if (normalizedTarget === normalizedOpenclawDir ||
-      normalizedTarget.startsWith(normalizedOpenclawDir + path.sep)) {
+  if (
+    normalizedTarget === normalizedOpenclawDir ||
+    normalizedTarget.startsWith(normalizedOpenclawDir + path.sep)
+  ) {
     return true; // 总是允许访问
   }
 
   // 3. 检查用户配置的允许目录
   return allowedDirectories.some((allowedDir) => {
     const normalizedAllowed = path.normalize(path.resolve(allowedDir));
-    return normalizedTarget === normalizedAllowed ||
-           normalizedTarget.startsWith(normalized + path.sep);
+    return (
+      normalizedTarget === normalizedAllowed || normalizedTarget.startsWith(normalized + path.sep)
+    );
   });
 }
 ```
@@ -728,8 +729,8 @@ export function isPathInAllowedDirectories(
 
 ```html
 <div class="callout info" style="margin-top: 8px">
-  <strong>Note:</strong> The OpenClaw workspace directory (~/.openclaw) is always allowed
-  and does not need to be added to the allowed directories list.
+  <strong>Note:</strong> The OpenClaw workspace directory (~/.openclaw) is always allowed and does
+  not need to be added to the allowed directories list.
 </div>
 ```
 
@@ -752,11 +753,11 @@ def normalize_path(raw_path: str) -> str:
     """Normalize path to unified format (forward slashes)."""
     # 1. Tilde expansion (~ to home directory)
     path = Path(raw_path).expanduser()
-    
+
     # 2. Convert to absolute path if not already
     if not path.is_absolute():
         path = path.resolve()
-    
+
     # 3. Normalize to forward slashes for consistency
     return str(path).replace('\\', '/')
 
@@ -828,14 +829,14 @@ if args.lookback is not None:
 def detect_layout(ws):
     """
     检测 Excel 模板的布局类型。
-    
+
     返回：
     - ('horizontal', 0): 水平布局，字段名在首行
     - ('vertical', col_idx): 垂直布局，字段名在 col_idx 列
     """
     # 1. 检查首行（水平布局）
     first_row_fields = count_fields_in_row(ws, 1)
-    
+
     # 2. 扫描所有列（垂直布局）
     max_vertical_fields = 0
     best_column = 1
@@ -844,7 +845,7 @@ def detect_layout(ws):
         if field_count > max_vertical_fields:
             max_vertical_fields = field_count
             best_column = col
-    
+
     # 3. 选择得分最高的布局
     if first_row_fields >= max_vertical_fields:
         return ('horizontal', 0)
@@ -894,16 +895,27 @@ description: 技能描述
 # Skill Name
 
 ## 检查操作系统
+
 ## 何时使用此技能
+
 ## 使用场景
+
 ## 核心能力
+
 ## 当前限制
+
 ## 安装依赖
+
 ## 使用流程
+
 ### Windows 用户
+
 ### Linux/macOS 用户
+
 ## 命令行参数
+
 ## 数据格式要求
+
 ## 常见问题
 ```
 
@@ -917,6 +929,84 @@ description: 技能描述
 
 ## 调试日志的最佳实践
 
+## License Key 系统设计
+
+### 安全架构
+
+**问题：对称加密密钥存储在客户端**
+
+如果使用对称加密（AES），密钥存储在客户端会导致安全问题：
+
+- 客户端可以读取密钥
+- 客户端可以自行生成任意 License
+
+**解决方案：公钥签名验证**
+
+```
+管理员端（离线、安全环境）:
+  私钥 (private.key) → 签名生成 license.key
+
+客户端:
+  公钥 (public.key) → 验证 license.key 签名
+  license.key → 包含用户名 + 到期日 + 签名
+```
+
+**为什么安全：**
+
+1. **客户端无法伪造 License**：没有私钥无法生成有效签名
+2. **公钥可以公开**：客户端持有公钥只能验证，不能签名
+3. **适合离线环境**：无需在线服务器验证
+
+### 跨平台用户名获取
+
+```typescript
+function getCurrentUsername(env: NodeJS.ProcessEnv): string | null {
+  if (process.platform === "win32") {
+    // Windows: 优先 USERNAME 环境变量
+    return env.USERNAME?.trim() || os.userInfo().username?.trim() || null;
+  } else {
+    // Linux/macOS: 优先 USER 或 LOGNAME 环境变量
+    return env.USER?.trim() || env.LOGNAME?.trim() || os.userInfo().username?.trim() || null;
+  }
+}
+```
+
+### 有效期限制
+
+- License 有效期最长 180 天（半年）
+- 过期后 24 小时宽限期
+- 宽限期内警告但允许运行
+
+### 文件位置
+
+| 角色   | 文件                  | 说明                   |
+| ------ | --------------------- | ---------------------- |
+| 管理员 | `admin/private.key`   | RSA 私钥，离线安全保管 |
+| 管理员 | `admin/public.key`    | RSA 公钥，分发给客户端 |
+| 客户端 | `configs/public.key`  | 公钥（验证签名）       |
+| 客户端 | `configs/license.key` | 签名后的 License       |
+
+### 使用流程
+
+```bash
+# 1. 生成密钥对（管理员，安全环境）
+node scripts/license-generator.mjs generate-keys \
+  --private-output admin/private.key \
+  --public-output configs/public.key
+
+# 2. 创建 License（管理员）
+node scripts/license-generator.mjs create \
+  --username "gyyz-laitungwong" \
+  --valid-days 30 \
+  --private-key admin/private.key \
+  --output configs/license.key
+
+# 3. 验证 License（客户端启动时自动执行）
+node scripts/license-generator.mjs verify \
+  --license configs/license.key \
+  --public-key configs/public.key
+```
+
 ### 使用结构化日志系统
 
 **问题：直接使用 console.log**
@@ -928,7 +1018,7 @@ console.log(`[read tool] Path validation:`, {
   resolvedPath,
   allowedDirectories: options.allowedDirectories,
   platform: process.platform,
-  isWindows
+  isWindows,
 });
 ```
 
@@ -945,7 +1035,7 @@ log.debug(`[read tool] Path validation:`, {
   resolvedPath,
   allowedDirectories: options.allowedDirectories,
   platform: process.platform,
-  isWindows
+  isWindows,
 });
 ```
 
@@ -953,12 +1043,12 @@ log.debug(`[read tool] Path validation:`, {
 
 **日志级别指南：**
 
-| 级别 | 用途 | 示例 |
-|------|------|------|
-| `debug` | 详细的调试信息 | 路径解析过程、参数验证 |
-| `info` | 一般信息 | 功能启用/禁用、配置加载 |
-| `warn` | 警告信息 | 配置错误、兼容性问题 |
-| `error` | 错误信息 | 权限拒绝、文件不存在 |
+| 级别    | 用途           | 示例                    |
+| ------- | -------------- | ----------------------- |
+| `debug` | 详细的调试信息 | 路径解析过程、参数验证  |
+| `info`  | 一般信息       | 功能启用/禁用、配置加载 |
+| `warn`  | 警告信息       | 配置错误、兼容性问题    |
+| `error` | 错误信息       | 权限拒绝、文件不存在    |
 
 **示例：**
 
@@ -968,7 +1058,7 @@ log.debug(`Path validation details:`, {
   input: filePath,
   normalized: resolvedPath,
   allowed: allowedDirectories,
-  result: isAllowed
+  result: isAllowed,
 });
 
 // Info: 重要状态
@@ -1003,7 +1093,7 @@ log.debug(`Path validation`, {
 
   // 结果
   isAllowed,
-  reason: isAllowed ? "in allowed list" : "not in allowed list"
+  reason: isAllowed ? "in allowed list" : "not in allowed list",
 });
 ```
 
@@ -1032,14 +1122,14 @@ try {
   log.debug(`Path validation result:`, {
     path: filePath,
     resolved: resolvedPath,
-    allowed: isAllowed
+    allowed: isAllowed,
   });
 
   if (!isAllowed) {
     log.error(`Access denied: ${filePath}`, {
       resolvedPath,
       allowedDirectories,
-      platform: process.platform
+      platform: process.platform,
     });
     throw createFsAccessError("EACCES", filePath);
   }
@@ -1048,7 +1138,7 @@ try {
     error: error instanceof Error ? error.message : String(error),
     stack: error instanceof Error ? error.stack : undefined,
     filePath,
-    allowedDirectories
+    allowedDirectories,
   });
   throw error;
 }
@@ -1094,12 +1184,7 @@ try {
 
 ```html
 <div style="display: flex; gap: 8px; align-items: center;">
-  <input
-    class="field mono"
-    style="flex: 1; min-width: 0;"
-    .value=${dir}
-    @input=${...}
-  />
-  <button class="btn btn--sm" @click=${...}>✕</button>
+  <input class="field mono" style="flex: 1; min-width: 0;" .value="${dir}" @input="${...}" />
+  <button class="btn btn--sm" @click="${...}">✕</button>
 </div>
 ```

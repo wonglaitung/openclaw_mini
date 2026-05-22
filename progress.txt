@@ -109,3 +109,49 @@
 - 多种输入格式：JSON 文件、JSON 字符串、键值对文本
 - 格式保留：字体、边框、颜色完整保留
 - 跨平台支持：Windows 批处理脚本 + Linux/macOS Python 脚本
+
+## 2026-05-22 - License Key 系统
+### 功能概述
+- 实现离线部署的 License Key 验证系统
+- 防止客户端被滥用，支持用户名绑定和有效期控制
+
+### 核心组件
+1. **scripts/license-generator.mjs** - 独立的 License 生成工具
+   - 生成 RSA 密钥对（2048 位）
+   - 创建签名 License（最长 180 天有效期）
+   - 验证 License 签名
+
+2. **src/license/** 模块
+   - `types.ts` - License 数据类型定义
+   - `crypto.ts` - RSA-SHA256 签名验证
+   - `user.ts` - 跨平台用户名获取
+   - `paths.ts` - 文件路径解析
+   - `validator.ts` - License 验证逻辑
+
+3. **Gateway 集成**
+   - 启动时验证 License 签名
+   - 检查用户名绑定
+   - 检查过期时间
+   - 24 小时宽限期支持
+
+### 安全设计
+- **公钥签名验证**：管理员持有私钥签名，客户端只有公钥验证
+- **客户端无法伪造**：没有私钥无法生成有效 License
+- **跨平台用户名绑定**：Windows (USERNAME) 和 Linux (USER/LOGNAME)
+
+### 文件位置
+- 管理员端：`admin/private.key`（私钥，离线保管）
+- 客户端：`configs/public.key`（公钥）+ `configs/license.key`（签名 License）
+
+### 配置示例
+```json
+{
+  "gateway": {
+    "license": {
+      "enabled": true,
+      "gracePeriodHours": 24,
+      "renewalWarningHours": 72
+    }
+  }
+}
+```
