@@ -42,6 +42,8 @@ export type LicenseValidationResult = {
   inGracePeriod?: boolean;
   /** 宽限期剩余小时数 */
   graceHoursRemaining?: number;
+  /** 过期时间的本地格式显示 */
+  expiresAtLocal?: string;
 };
 
 /**

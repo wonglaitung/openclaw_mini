@@ -84,12 +84,16 @@ export function validateLicense(
     };
   }
 
+  // Format expiresAt to local time
+  const expiresAtLocal = new Date(signedLicense.payload.expiresAt).toLocaleString();
+
   return {
     valid: true,
     payload: signedLicense.payload,
     inGracePeriod: payloadResult.inGracePeriod,
     graceHoursRemaining: payloadResult.graceHoursRemaining,
     reason: payloadResult.reason,
+    expiresAtLocal,
   };
 }
 

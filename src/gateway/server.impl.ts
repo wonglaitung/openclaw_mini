@@ -548,7 +548,7 @@ export async function startGatewayServer(
     }
 
     log.info(
-      `License valid for user: ${licenseResult.payload?.username} (expires: ${licenseResult.payload?.expiresAt})`,
+      `License valid for user: ${licenseResult.payload?.username} (expires: ${licenseResult.expiresAtLocal})`,
     );
   }
 
